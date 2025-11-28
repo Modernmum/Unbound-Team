@@ -1,4 +1,4 @@
-# 🚀 EntrepreneurHub.ai
+# 🚀 Unbound.team.ai
 
 **Own platform. Own data. Own future.**
 
@@ -13,7 +13,7 @@ A community platform where entrepreneurs share problems, products, and revenue -
 1. Go to https://supabase.com/dashboard
 2. Click "New Project"
 3. Settings:
-   - Name: `EntrepreneurHub`
+   - Name: `Unbound.team`
    - Database Password: (generate strong password)
    - Region: (closest to you)
    - Plan: Free tier (upgrade later)
@@ -32,7 +32,7 @@ Once project is ready:
 
 Create `entrepreneurhub/.env`:
 ```bash
-# EntrepreneurHub.ai - Separate Database
+# Unbound.team.ai - Separate Database
 ENTREPRENEURHUB_SUPABASE_URL=https://xxxxx.supabase.co
 ENTREPRENEURHUB_SUPABASE_KEY=eyJ...your_anon_key...
 ```

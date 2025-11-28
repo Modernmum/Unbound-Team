@@ -1,6 +1,6 @@
-# ✅ EntrepreneurHub.ai - Setup Checklist
+# ✅ Unbound.team.ai - Setup Checklist
 
-**Goal:** Launch EntrepreneurHub.ai by Sunday with clean, separate database
+**Goal:** Launch Unbound.team.ai by Sunday with clean, separate database
 
 ---
 
@@ -12,7 +12,7 @@
 2. Click "New Project"
 3. Fill in:
    - **Organization:** (select or create)
-   - **Name:** `EntrepreneurHub`
+   - **Name:** `Unbound.team`
    - **Database Password:** (click generate - SAVE THIS!)
    - **Region:** `US West (Oregon)` or closest to you
    - **Pricing Plan:** Free
@@ -38,7 +38,7 @@ anon public key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB...
 Create file: `entrepreneurhub/.env`
 
 ```bash
-# EntrepreneurHub.ai - Clean Database
+# Unbound.team.ai - Clean Database
 ENTREPRENEURHUB_SUPABASE_URL=https://xxxxxxxxxxxxx.supabase.co
 ENTREPRENEURHUB_SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
@@ -122,7 +122,7 @@ Now that database is ready:
 ## 📊 WHAT YOU HAVE NOW
 
 **Clean, separate infrastructure:**
-- ✅ New Supabase project (EntrepreneurHub)
+- ✅ New Supabase project (Unbound.team)
 - ✅ Complete database schema
 - ✅ Row Level Security configured
 - ✅ Auto-updating counts (comments, upvotes)
