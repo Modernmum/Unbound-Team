@@ -128,32 +128,36 @@ class TaskQueueManager {
     const { userId, targetIndustry, location, criteria } = data;
 
     try {
-      // Step 1: Use AI to create search strategy
-      const strategy = await orchestrator.execute(
-        'lead-research',
-        `Create a lead generation strategy for finding ${criteria.count || 50} leads in the ${targetIndustry} industry in ${location || 'any location'}.
+      const leadScraper = require('./lead-scraper');
 
-        Criteria: ${JSON.stringify(criteria)}
+      // Execute full lead generation pipeline
+      const leads = await leadScraper.findLeads({
+        targetIndustry,
+        location,
+        criteria: {
+          ...criteria,
+          count: criteria.count || 50,
+          minScore: criteria.minScore || 6
+        }
+      });
 
-        Provide:
-        1. Best sources to find these leads (indie forums, directories, blogs)
-        2. Search queries to use
-        3. Qualification criteria
-        4. Contact info extraction strategy`
-      );
-
-      // Step 2: Execute web scraping (TODO: Implement actual scraping)
-      const leads = await this.scrapeLeads(strategy.content, criteria);
-
-      // Step 3: Enrich and score leads with AI
-      const enrichedLeads = await this.enrichLeads(leads);
+      // Export formats
+      const csv = leadScraper.exportToCSV(leads);
+      const json = leadScraper.exportToJSON(leads);
 
       return {
         success: true,
-        leadsFound: enrichedLeads.length,
-        leads: enrichedLeads,
-        strategy: strategy.content,
-        cost: strategy.usage
+        leadsFound: leads.length,
+        leads: leads,
+        exports: {
+          csv: csv,
+          json: json
+        },
+        summary: {
+          totalFound: leads.length,
+          avgFitScore: leads.reduce((sum, l) => sum + (l.fitScore || 0), 0) / leads.length,
+          sources: [...new Set(leads.map(l => l.source))]
+        }
       };
     } catch (error) {
       console.error('Lead generation failed:', error);
@@ -331,18 +335,6 @@ class TaskQueueManager {
   // HELPER METHODS
   // ============================================================================
 
-  async scrapeLeads(strategy, criteria) {
-    // TODO: Implement actual web scraping
-    // For now, return mock data
-    return [
-      { name: 'Example Lead', email: 'lead@example.com', source: 'indie forum' }
-    ];
-  }
-
-  async enrichLeads(leads) {
-    // TODO: Use AI to enrich lead data
-    return leads;
-  }
 
   // Get job status
   async getJobStatus(queueName, jobId) {
