@@ -3,6 +3,7 @@
 
 const axios = require('axios');
 const cheerio = require('cheerio');
+const contentSafety = require('./content-safety');
 
 class RSSMonitor {
   constructor() {
@@ -41,9 +42,29 @@ class RSSMonitor {
       try {
         const items = await this.parseFeed(feedUrl);
         const relevant = this.filterRelevant(items);
-        opportunities.push(...relevant);
 
-        console.log(`  ✓ ${feedUrl}: Found ${relevant.length} opportunities`);
+        // SAFETY CHECK: Filter out illegal/harmful content
+        const safeOpportunities = [];
+        for (const opp of relevant) {
+          const safetyCheck = await contentSafety.checkContent(
+            `${opp.title} ${opp.description}`,
+            {
+              type: 'rss_opportunity',
+              source: feedUrl,
+              url: opp.link
+            }
+          );
+
+          if (safetyCheck.safe) {
+            safeOpportunities.push(opp);
+          } else {
+            console.warn(`  ⚠️  BLOCKED unsafe content from ${feedUrl}`);
+          }
+        }
+
+        opportunities.push(...safeOpportunities);
+
+        console.log(`  ✓ ${feedUrl}: Found ${safeOpportunities.length} safe opportunities`);
       } catch (error) {
         console.error(`  ✗ Failed to scan ${feedUrl}:`, error.message);
       }

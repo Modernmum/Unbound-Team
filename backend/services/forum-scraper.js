@@ -3,6 +3,7 @@
 
 const axios = require('axios');
 const cheerio = require('cheerio');
+const contentSafety = require('./content-safety');
 
 class ForumScraper {
   constructor() {
@@ -95,7 +96,30 @@ class ForumScraper {
       }
     }
 
-    return posts;
+    // SAFETY CHECK: Filter out illegal/harmful content before returning
+    console.log(`\n🔒 Running safety checks on ${posts.length} posts...`);
+    const safePosts = [];
+    for (const post of posts) {
+      const safetyCheck = await contentSafety.checkContent(
+        `${post.title} ${post.text}`,
+        {
+          type: 'forum_post',
+          source: 'reddit',
+          url: post.url,
+          subreddit: post.subreddit
+        }
+      );
+
+      if (safetyCheck.safe) {
+        safePosts.push(post);
+      } else {
+        console.warn(`  ⚠️  BLOCKED unsafe content from r/${post.subreddit}`);
+      }
+    }
+
+    console.log(`✅ ${safePosts.length}/${posts.length} posts passed safety checks\n`);
+
+    return safePosts;
   }
 
   // Check if post is business/entrepreneur related

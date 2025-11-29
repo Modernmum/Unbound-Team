@@ -2,6 +2,7 @@
 // NO SPAM - Only value-first, helpful responses
 
 const orchestrator = require('./ai-orchestrator');
+const contentSafety = require('./content-safety');
 
 class AutoEngagement {
   constructor() {
@@ -21,8 +22,8 @@ class AutoEngagement {
   async generateResponse(opportunity) {
     const { title, text, painPoints, businessArea, source } = opportunity;
 
-    // Check if we should engage
-    if (!this.shouldEngage(opportunity)) {
+    // Check if we should engage (includes safety check)
+    if (!(await this.shouldEngage(opportunity))) {
       return null;
     }
 
@@ -62,7 +63,22 @@ Keep it brief, valuable, and human. No salesy language.`;
   }
 
   // Determine if we should engage with this opportunity
-  shouldEngage(opportunity) {
+  async shouldEngage(opportunity) {
+    // CRITICAL: Safety check first - NEVER engage with harmful content
+    const safetyCheck = await contentSafety.checkContent(
+      `${opportunity.title} ${opportunity.text}`,
+      {
+        type: 'engagement_check',
+        source: opportunity.source,
+        url: opportunity.url
+      }
+    );
+
+    if (!safetyCheck.safe) {
+      console.warn('⚠️  BLOCKED engagement with unsafe content');
+      return false;
+    }
+
     // Must have high fit score
     if (opportunity.fitScore < this.rules.minValueThreshold) {
       return false;
@@ -134,10 +150,10 @@ Keep it brief, valuable, and human. No salesy language.`;
         continue;
       }
 
-      if (!this.shouldEngage(opp)) {
+      if (!(await this.shouldEngage(opp))) {
         plan.skipped.push({
           opportunity: opp,
-          reason: 'Does not meet engagement criteria'
+          reason: 'Does not meet engagement criteria or failed safety check'
         });
         continue;
       }
