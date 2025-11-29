@@ -1,12 +1,15 @@
 {
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/api/solutions/:path*",
-      "destination": "https://web-production-486cb.up.railway.app/api/solutions/:path*"
-    },
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
     {
-      "source": "/api/jobs/:path*",
-      "destination": "https://web-production-486cb.up.railway.app/api/jobs/:path*"
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
     }
   ]
 }
