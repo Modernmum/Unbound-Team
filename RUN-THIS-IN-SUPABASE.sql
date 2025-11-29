@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS tenant_user_usage (
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   month TEXT NOT NULL,
   problems_solved INTEGER DEFAULT 0,
-  limit INTEGER,
+  usage_limit INTEGER,
   lead_generation_count INTEGER DEFAULT 0,
   content_creation_count INTEGER DEFAULT 0,
   market_research_count INTEGER DEFAULT 0,
