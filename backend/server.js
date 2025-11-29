@@ -4,7 +4,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const taskQueue = require('./services/task-queue');
+const taskQueue = require('./services/supabase-queue');
 const orchestrator = require('./services/ai-orchestrator');
 
 const app = express();
