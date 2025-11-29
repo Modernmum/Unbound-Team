@@ -141,8 +141,24 @@ app.post('/api/solutions/lead-generation', async (req, res) => {
       success: true,
       jobId: job.id,
       message: 'Lead generation started. Check back in a few minutes.',
-      statusUrl: `/api/jobs/leadGeneration/${job.id}`
+      statusUrl: `/api/solutions/lead-generation/status/${job.id}`
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get lead generation job status
+app.get('/api/solutions/lead-generation/status/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const status = await taskQueue.getJobStatus('leadGeneration', jobId);
+
+    if (!status) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    res.json(status);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
