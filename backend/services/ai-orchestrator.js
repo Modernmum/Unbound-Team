@@ -111,46 +111,67 @@ class AIOrchestrator {
 
   // Main method: execute AI task with automatic model selection
   async execute(taskType, prompt, options = {}) {
-    try {
-      const modelId = this.selectModel(taskType);
-      const model = config.models[modelId];
+    this.resetDailyUsage();
 
-      let result;
+    const candidates = config.taskRouting[taskType] || ['gemini', 'gpt-4o-mini', 'claude-haiku'];
+    let lastError = null;
 
-      switch (model.provider) {
-        case 'google':
-          result = await this.callGemini(prompt, options);
-          break;
-        case 'openai':
-          result = await this.callOpenAI(modelId, prompt, options);
-          break;
-        case 'anthropic':
-          result = await this.callClaude(modelId, prompt, options);
-          break;
-        case 'perplexity':
-          result = await this.callPerplexity(prompt, options);
-          break;
-        default:
-          throw new Error(`Unknown provider: ${model.provider}`);
+    // Try each model in order until one succeeds
+    for (const modelId of candidates) {
+      try {
+        const model = config.models[modelId];
+
+        // Check if model is available and affordable
+        if (!this.canAffordRequest(modelId)) {
+          console.log(`⏭️  Skipping ${model.name} - budget/limit reached`);
+          continue;
+        }
+
+        console.log(`🔄 Trying ${model.name} for ${taskType}...`);
+        let result;
+
+        switch (model.provider) {
+          case 'google':
+            result = await this.callGemini(prompt, options);
+            break;
+          case 'openai':
+            result = await this.callOpenAI(modelId, prompt, options);
+            break;
+          case 'anthropic':
+            result = await this.callClaude(modelId, prompt, options);
+            break;
+          case 'perplexity':
+            result = await this.callPerplexity(prompt, options);
+            break;
+          default:
+            throw new Error(`Unknown provider: ${model.provider}`);
+        }
+
+        // Track usage
+        const usage = this.trackUsage(
+          modelId,
+          result.inputTokens || 1000,
+          result.outputTokens || 1000
+        );
+
+        console.log(`✅ Success with ${model.name}`);
+
+        return {
+          content: result.content,
+          modelUsed: modelId,
+          usage: usage
+        };
+
+      } catch (error) {
+        lastError = error;
+        console.error(`❌ ${config.models[modelId].name} failed: ${error.message}`);
+        console.log(`🔄 Falling back to next model...`);
+        continue;
       }
-
-      // Track usage
-      const usage = this.trackUsage(
-        modelId,
-        result.inputTokens || 1000,
-        result.outputTokens || 1000
-      );
-
-      return {
-        content: result.content,
-        modelUsed: modelId,
-        usage: usage
-      };
-
-    } catch (error) {
-      console.error('AI Orchestrator Error:', error.message);
-      throw error;
     }
+
+    // If all models failed, throw the last error
+    throw new Error(`All AI models failed. Last error: ${lastError?.message || 'Unknown error'}`);
   }
 
   // Provider-specific API calls (delegated to AIProviders)
