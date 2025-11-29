@@ -29,7 +29,7 @@ class AIProviders {
     }
 
     try {
-      const model = this.gemini.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = this.gemini.getGenerativeModel({ model: 'gemini-pro' });
 
       const result = await model.generateContent(prompt);
       const response = await result.response;
