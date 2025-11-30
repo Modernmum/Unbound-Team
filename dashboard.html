@@ -86,6 +86,25 @@
     <!-- AI WORKFORCE TAB -->
     <div id="workforce-tab" class="tab-content">
 
+      <!-- Getting Started Banner -->
+      <div class="bg-gradient-to-r from-cyan-500/10 to-blue-600/10 border border-cyan-500/30 p-6 rounded-xl mb-8">
+        <h2 class="text-2xl font-black gradient-text mb-2">👋 Welcome to Your Autonomous Workforce!</h2>
+        <p class="text-gray-300 mb-4">
+          Click any solution below to launch an AI job. Your autonomous team will work 24/7 to generate leads, create content, research markets, and more—all on autopilot.
+        </p>
+        <div class="flex items-center space-x-4 text-sm">
+          <div class="flex items-center text-green-400">
+            <span class="mr-2">✓</span> No credit card required
+          </div>
+          <div class="flex items-center text-green-400">
+            <span class="mr-2">✓</span> $5/day AI cost cap
+          </div>
+          <div class="flex items-center text-green-400">
+            <span class="mr-2">✓</span> Export results to CSV
+          </div>
+        </div>
+      </div>
+
       <!-- Stats Overview -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div class="bg-[#1a1f3a] p-6 rounded-xl border border-cyan-500/20 hover-lift">
@@ -123,7 +142,10 @@
 
       <!-- Quick Actions -->
       <div class="mb-8">
-        <h2 class="text-2xl font-black mb-4">Launch New Job</h2>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-black">🚀 Launch New Job</h2>
+          <span class="text-sm text-gray-400">Click a solution to get started →</span>
+        </div>
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <button onclick="launchJob('lead-generation')" class="bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 p-6 rounded-xl hover-lift text-left">
             <div class="text-4xl mb-2">🎯</div>
