@@ -4,14 +4,60 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const taskQueue = require('./services/supabase-queue');
-const orchestrator = require('./services/ai-orchestrator');
-const queueWorker = require('./services/queue-worker');
-const partnerManager = require('./services/partner-manager');
-const automationScheduler = require('./services/automation-scheduler');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Service references (loaded safely)
+let taskQueue, orchestrator, queueWorker, partnerManager, automationScheduler;
+const serviceStatus = {
+  taskQueue: false,
+  orchestrator: false,
+  queueWorker: false,
+  partnerManager: false,
+  automationScheduler: false
+};
+
+// Safely load services with error handling
+try {
+  taskQueue = require('./services/supabase-queue');
+  serviceStatus.taskQueue = true;
+  console.log('✅ Task Queue loaded');
+} catch (err) {
+  console.warn('⚠️  Task Queue failed to load:', err.message);
+}
+
+try {
+  orchestrator = require('./services/ai-orchestrator');
+  serviceStatus.orchestrator = true;
+  console.log('✅ AI Orchestrator loaded');
+} catch (err) {
+  console.warn('⚠️  AI Orchestrator failed to load:', err.message);
+}
+
+try {
+  queueWorker = require('./services/queue-worker');
+  serviceStatus.queueWorker = true;
+  console.log('✅ Queue Worker loaded');
+} catch (err) {
+  console.warn('⚠️  Queue Worker failed to load:', err.message);
+}
+
+try {
+  partnerManager = require('./services/partner-manager');
+  serviceStatus.partnerManager = true;
+  console.log('✅ Partner Manager loaded');
+} catch (err) {
+  console.warn('⚠️  Partner Manager failed to load:', err.message);
+}
+
+try {
+  automationScheduler = require('./services/automation-scheduler');
+  serviceStatus.automationScheduler = true;
+  console.log('✅ Automation Scheduler loaded');
+} catch (err) {
+  console.warn('⚠️  Automation Scheduler failed to load:', err.message);
+}
 
 // Middleware
 app.use(cors());
@@ -31,7 +77,17 @@ app.get('/', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+  const servicesLoaded = Object.values(serviceStatus).filter(Boolean).length;
+  const totalServices = Object.keys(serviceStatus).length;
+
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    services: serviceStatus,
+    servicesLoaded: `${servicesLoaded}/${totalServices}`,
+    platform: 'Railway',
+    version: '1.0.0'
+  });
 });
 
 // ============================================================================
@@ -41,6 +97,9 @@ app.get('/health', (req, res) => {
 // Get AI usage stats
 app.get('/api/ai/stats', (req, res) => {
   try {
+    if (!orchestrator) {
+      return res.status(503).json({ error: 'AI Orchestrator service not available' });
+    }
     const stats = orchestrator.getStats();
     res.json(stats);
   } catch (error) {
@@ -505,6 +564,9 @@ app.get('/api/automation/:tenantSlug/stats', async (req, res) => {
 // ============================================================================
 
 app.listen(PORT, () => {
+  const servicesLoaded = Object.values(serviceStatus).filter(Boolean).length;
+  const totalServices = Object.keys(serviceStatus).length;
+
   console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
 ║                      UNBOUND.TEAM API                         ║
@@ -514,24 +576,71 @@ app.listen(PORT, () => {
 ✅ Server running on port ${PORT}
 🌐 API: http://localhost:${PORT}
 📊 Health: http://localhost:${PORT}/health
-💰 AI Stats: http://localhost:${PORT}/api/ai/stats
-📋 Queue Stats: http://localhost:${PORT}/api/queues/stats
-🤖 Automation: http://localhost:${PORT}/api/automation/status
+📋 Services: ${servicesLoaded}/${totalServices} loaded
 
-🚀 Ready to solve entrepreneur problems autonomously!
+${serviceStatus.orchestrator ? '✅' : '❌'} AI Orchestrator
+${serviceStatus.taskQueue ? '✅' : '❌'} Task Queue
+${serviceStatus.queueWorker ? '✅' : '❌'} Queue Worker
+${serviceStatus.partnerManager ? '✅' : '❌'} Partner Manager
+${serviceStatus.automationScheduler ? '✅' : '❌'} Automation Scheduler
+
+🚀 ${servicesLoaded === totalServices ? 'All systems ready!' : 'Running in degraded mode - some features may be unavailable'}
   `);
 
-  // Start queue worker
-  queueWorker.start();
+  // Start queue worker if available
+  if (queueWorker) {
+    try {
+      queueWorker.start();
+      console.log('✅ Queue worker started');
+    } catch (err) {
+      console.warn('⚠️  Queue worker failed to start:', err.message);
+    }
+  }
 
-  // Start automation scheduler
-  automationScheduler.start();
+  // Start automation scheduler if available
+  if (automationScheduler) {
+    try {
+      automationScheduler.start();
+      console.log('✅ Automation scheduler started');
+    } catch (err) {
+      console.warn('⚠️  Automation scheduler failed to start:', err.message);
+    }
+  }
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully...');
-  queueWorker.stop();
-  automationScheduler.stop();
+
+  if (queueWorker && queueWorker.stop) {
+    try {
+      queueWorker.stop();
+      console.log('✅ Queue worker stopped');
+    } catch (err) {
+      console.warn('⚠️  Error stopping queue worker:', err.message);
+    }
+  }
+
+  if (automationScheduler && automationScheduler.stop) {
+    try {
+      automationScheduler.stop();
+      console.log('✅ Automation scheduler stopped');
+    } catch (err) {
+      console.warn('⚠️  Error stopping automation scheduler:', err.message);
+    }
+  }
+
   process.exit(0);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception:', err);
+  // Don't exit - let the app continue running in degraded mode
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit - let the app continue running in degraded mode
 });
