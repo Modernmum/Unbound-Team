@@ -154,37 +154,57 @@
     const SUPABASE_URL = 'https://bixudsnkdeafczzqfvdq.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpeHVkc25rZGVhZmN6enFmdmRxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI4MDExMDEsImV4cCI6MjA0ODM3NzEwMX0.qg9vYmZxNXBPJNGmW3DRYqN_Kk7O0xY4FQZ9jJz8nWI';
 
-    const clientId = sessionStorage.getItem('clientId');
-    const clientEmail = sessionStorage.getItem('clientEmail');
+    // Get clientId from session or use demo client
+    let clientId = sessionStorage.getItem('clientId');
+    let clientEmail = sessionStorage.getItem('clientEmail');
 
+    // If no session, use Maggie Forbes as demo
     if (!clientId) {
-      window.location.href = '/client-login.html';
+      clientId = '28022115-e4de-4c8c-90c8-43dcae10042a'; // Maggie Forbes
+      clientEmail = 'maggie@maggieforbesstrategies.com';
+      sessionStorage.setItem('clientId', clientId);
+      sessionStorage.setItem('clientEmail', clientEmail);
     }
 
     document.getElementById('userEmail').textContent = clientEmail;
 
     async function loadDashboard() {
       try {
-        // Call dashboard API endpoint
-        const response = await fetch(`/api/dashboard-data?clientId=${clientId}`);
-        const data = await response.json();
+        // Load directly from Supabase (RLS disabled)
+        const clientRes = await fetch(`${SUPABASE_URL}/rest/v1/testing_clients?id=eq.${clientId}`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        const clients = await clientRes.json();
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || 'Failed to load dashboard');
+        if (!clients || clients.length === 0) {
+          throw new Error('Client not found');
         }
+        const client = clients[0];
 
         // Update header
-        document.getElementById('clientName').textContent = data.client.name;
-        document.getElementById('siteUrl').textContent = data.client.siteUrl;
+        document.getElementById('clientName').textContent = client.client_name;
+        document.getElementById('siteUrl').textContent = client.site_url;
 
-        // Update stats
-        document.getElementById('latestRating').textContent = `${data.stats.latestRating}/10`;
-        document.getElementById('testsRun').textContent = data.stats.testsRun;
-        document.getElementById('openIssues').textContent = data.stats.openIssues;
-        document.getElementById('healthScore').textContent = `${data.stats.healthScore}%`;
+        // Load test results
+        const testsRes = await fetch(`${SUPABASE_URL}/rest/v1/bot_test_results?client_id=eq.${clientId}&order=test_date.desc&limit=10`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        const tests = await testsRes.json();
+
+        // Calculate and update stats
+        if (tests && tests.length > 0) {
+          const latestTest = tests[0];
+          document.getElementById('latestRating').textContent = `${latestTest.overall_rating}/10`;
+          document.getElementById('testsRun').textContent = tests.length;
+          const openIssuesCount = tests.reduce((sum, test) => sum + (test.critical_issues || 0) + (test.high_issues || 0), 0);
+          document.getElementById('openIssues').textContent = openIssuesCount;
+          const avgRating = tests.slice(0, 5).reduce((sum, t) => sum + t.overall_rating, 0) / Math.min(tests.length, 5);
+          const healthScore = Math.round((avgRating / 10) * 100);
+          document.getElementById('healthScore').textContent = `${healthScore}%`;
+        }
 
         // Display test results
-        displayTestResults(data.tests);
+        displayTestResults(tests);
       } catch (error) {
         console.error('Error loading dashboard:', error);
         document.getElementById('testResultsContainer').innerHTML = '<div class="empty-state"><p>Error loading dashboard. Please try again.</p></div>';
