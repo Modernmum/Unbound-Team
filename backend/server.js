@@ -116,13 +116,22 @@ app.get('/health', (req, res) => {
   const servicesLoaded = Object.values(serviceStatus).filter(Boolean).length;
   const totalServices = Object.keys(serviceStatus).length;
 
+  // Check which critical env vars are set
+  const envCheck = {
+    SUPABASE_URL: !!process.env.SUPABASE_URL,
+    SUPABASE_KEY: !!process.env.SUPABASE_KEY,
+    SUPABASE_SERVICE_KEY: !!process.env.SUPABASE_SERVICE_KEY,
+    ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY
+  };
+
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     services: serviceStatus,
     servicesLoaded: `${servicesLoaded}/${totalServices}`,
     platform: 'Railway',
-    version: '1.0.0'
+    version: '1.0.0',
+    envVarsSet: envCheck
   });
 });
 
