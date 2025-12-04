@@ -9,7 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Service references (loaded safely)
-let taskQueue, orchestrator, queueWorker, partnerManager, automationScheduler, matchmakingService, emailService;
+let taskQueue, orchestrator, queueWorker, partnerManager, automationScheduler, matchmakingService, emailService, empireAgiBrain, appointmentMonitor;
 const serviceStatus = {
   taskQueue: false,
   orchestrator: false,
@@ -17,7 +17,9 @@ const serviceStatus = {
   partnerManager: false,
   automationScheduler: false,
   matchmakingService: false,
-  emailService: false
+  emailService: false,
+  empireAgiBrain: false,
+  appointmentMonitor: false
 };
 
 // Safely load services with error handling
@@ -75,6 +77,22 @@ try {
   console.log('✅ Email Service loaded');
 } catch (err) {
   console.warn('⚠️  Email Service failed to load:', err.message);
+}
+
+try {
+  empireAgiBrain = require('./services/empire-agi-brain');
+  serviceStatus.empireAgiBrain = true;
+  console.log('✅ Empire AGI Brain loaded');
+} catch (err) {
+  console.warn('⚠️  Empire AGI Brain failed to load:', err.message);
+}
+
+try {
+  appointmentMonitor = require('./services/appointment-monitor');
+  serviceStatus.appointmentMonitor = true;
+  console.log('✅ Appointment Monitor loaded');
+} catch (err) {
+  console.warn('⚠️  Appointment Monitor failed to load:', err.message);
 }
 
 // Middleware
@@ -913,6 +931,11 @@ ${serviceStatus.partnerManager ? '✅' : '❌'} Partner Manager
 ${serviceStatus.automationScheduler ? '✅' : '❌'} Automation Scheduler
 
 🚀 ${servicesLoaded === totalServices ? 'All systems ready!' : 'Running in degraded mode - some features may be unavailable'}
+
+${serviceStatus.empireAgiBrain ? '🧠 Empire AGI Brain: ACTIVE - Autonomous business management running' : ''}
+${serviceStatus.automationScheduler ? '⏰ Automation Scheduler: ACTIVE - Cron jobs running' : ''}
+${serviceStatus.queueWorker ? '⚙️  Queue Worker: ACTIVE - Processing background jobs' : ''}
+${serviceStatus.appointmentMonitor ? '📅 Appointment Monitor: ACTIVE - Tracking appointments' : ''}
   `);
 
   // Start queue worker if available
@@ -932,6 +955,26 @@ ${serviceStatus.automationScheduler ? '✅' : '❌'} Automation Scheduler
       console.log('✅ Automation scheduler started');
     } catch (err) {
       console.warn('⚠️  Automation scheduler failed to start:', err.message);
+    }
+  }
+
+  // Start Empire AGI Brain if available
+  if (empireAgiBrain) {
+    try {
+      empireAgiBrain.start();
+      console.log('✅ Empire AGI Brain started - Autonomous business management active');
+    } catch (err) {
+      console.warn('⚠️  Empire AGI Brain failed to start:', err.message);
+    }
+  }
+
+  // Start Appointment Monitor if available
+  if (appointmentMonitor) {
+    try {
+      appointmentMonitor.start();
+      console.log('✅ Appointment Monitor started - Tracking appointments every 5 minutes');
+    } catch (err) {
+      console.warn('⚠️  Appointment Monitor failed to start:', err.message);
     }
   }
 });
@@ -955,6 +998,24 @@ process.on('SIGTERM', () => {
       console.log('✅ Automation scheduler stopped');
     } catch (err) {
       console.warn('⚠️  Error stopping automation scheduler:', err.message);
+    }
+  }
+
+  if (empireAgiBrain && empireAgiBrain.stop) {
+    try {
+      empireAgiBrain.stop();
+      console.log('✅ Empire AGI Brain stopped');
+    } catch (err) {
+      console.warn('⚠️  Error stopping Empire AGI Brain:', err.message);
+    }
+  }
+
+  if (appointmentMonitor && appointmentMonitor.stop) {
+    try {
+      appointmentMonitor.stop();
+      console.log('✅ Appointment Monitor stopped');
+    } catch (err) {
+      console.warn('⚠️  Error stopping Appointment Monitor:', err.message);
     }
   }
 
