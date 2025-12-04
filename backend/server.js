@@ -9,13 +9,15 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Service references (loaded safely)
-let taskQueue, orchestrator, queueWorker, partnerManager, automationScheduler;
+let taskQueue, orchestrator, queueWorker, partnerManager, automationScheduler, matchmakingService, emailService;
 const serviceStatus = {
   taskQueue: false,
   orchestrator: false,
   queueWorker: false,
   partnerManager: false,
-  automationScheduler: false
+  automationScheduler: false,
+  matchmakingService: false,
+  emailService: false
 };
 
 // Safely load services with error handling
@@ -57,6 +59,22 @@ try {
   console.log('✅ Automation Scheduler loaded');
 } catch (err) {
   console.warn('⚠️  Automation Scheduler failed to load:', err.message);
+}
+
+try {
+  matchmakingService = require('./services/matchmaking-service');
+  serviceStatus.matchmakingService = true;
+  console.log('✅ Matchmaking Service loaded');
+} catch (err) {
+  console.warn('⚠️  Matchmaking Service failed to load:', err.message);
+}
+
+try {
+  emailService = require('./services/email-service');
+  serviceStatus.emailService = true;
+  console.log('✅ Email Service loaded');
+} catch (err) {
+  console.warn('⚠️  Email Service failed to load:', err.message);
 }
 
 // Middleware
@@ -178,6 +196,316 @@ app.get('/api/queues/stats', async (req, res) => {
   try {
     const stats = await taskQueue.getAllStats();
     res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// MAGGIE FORBES API - Client Management & Lead Generation
+// ============================================================================
+
+// Add a new Maggie Forbes client
+app.post('/api/maggie-forbes/clients', async (req, res) => {
+  try {
+    const { email, name, plan = 'premium' } = req.body;
+
+    if (!email || !name) {
+      return res.status(400).json({ error: 'email and name are required' });
+    }
+
+    const result = await partnerManager.provisionClient({
+      tenantSlug: 'maggie-forbes',
+      userEmail: email,
+      userName: name,
+      plan: plan,
+      source: 'maggie-forbes-api'
+    });
+
+    res.json({
+      success: true,
+      client: result.user,
+      message: `Client ${name} added to Maggie Forbes`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all Maggie Forbes clients
+app.get('/api/maggie-forbes/clients', async (req, res) => {
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_KEY
+    );
+
+    const { data, error } = await supabase.rpc('get_maggie_forbes_clients');
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      clients: data || [],
+      count: data?.length || 0
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate leads for a Maggie Forbes client
+app.post('/api/maggie-forbes/generate-leads', async (req, res) => {
+  try {
+    const { clientEmail, industry, count = 50, targetTitles } = req.body;
+
+    if (!clientEmail) {
+      return res.status(400).json({ error: 'clientEmail is required' });
+    }
+
+    const job = await taskQueue.addJob('lead-generation', {
+      business: 'maggie-forbes',
+      userEmail: clientEmail,
+      targetIndustry: industry || 'technology',
+      criteria: {
+        count: count,
+        targetTitles: targetTitles || ['CEO', 'VP', 'Chief', 'Director', 'President', 'Founder'],
+        companySizeMin: 50,
+        companySizeMax: 500
+      }
+    });
+
+    res.json({
+      success: true,
+      jobId: job.id,
+      message: `Lead generation started for ${clientEmail}`,
+      estimatedTime: '2-3 minutes'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get lead generation results for a client
+app.get('/api/maggie-forbes/clients/:email/leads', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_KEY
+    );
+
+    const { data, error } = await supabase
+      .from('job_queue')
+      .select('*')
+      .eq('queue_name', 'lead-generation')
+      .contains('job_data', { userEmail: email })
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      client: email,
+      jobs: data || [],
+      totalJobs: data?.length || 0
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get Maggie Forbes business stats
+app.get('/api/maggie-forbes/stats', async (req, res) => {
+  try {
+    const stats = await partnerManager.getTenantStats('maggie-forbes');
+
+    res.json({
+      success: true,
+      tenant: 'Maggie Forbes Strategies',
+      stats: stats
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// MATCHMAKING ENDPOINTS - $100K/Month Arbitrage Engine
+// ============================================================================
+
+// 1. Discover a need (from RSS, manual, etc.)
+app.post('/api/matchmaking/discover-need', async (req, res) => {
+  try {
+    const { source, sourceUrl, rawContent, personName, personEmail, companyName } = req.body;
+
+    if (!rawContent) {
+      return res.status(400).json({ error: 'rawContent is required' });
+    }
+
+    const need = await matchmakingService.discoverNeed({
+      source: source || 'Manual',
+      sourceUrl,
+      rawContent,
+      personName,
+      personEmail,
+      companyName
+    });
+
+    res.json({
+      success: true,
+      need,
+      message: 'Need discovered and matches are being found'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 2. Add a solution provider
+app.post('/api/matchmaking/add-provider', async (req, res) => {
+  try {
+    const { name, email, company, title, expertiseAreas, industries, source, profileUrl } = req.body;
+
+    if (!name || !expertiseAreas) {
+      return res.status(400).json({ error: 'name and expertiseAreas are required' });
+    }
+
+    const provider = await matchmakingService.addProvider({
+      name,
+      email,
+      company,
+      title,
+      expertiseAreas,
+      industries,
+      availability: 'available',
+      source: source || 'Manual',
+      profileUrl
+    });
+
+    res.json({
+      success: true,
+      provider,
+      message: `Provider ${name} added successfully`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3. Get potential matches (for review)
+app.get('/api/matchmaking/matches/potential', async (req, res) => {
+  try {
+    const minFitScore = parseFloat(req.query.minFitScore) || 7;
+
+    const matches = await matchmakingService.getPotentialMatches(minFitScore);
+
+    res.json({
+      success: true,
+      matches,
+      count: matches.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4. Approve a match and send introduction
+app.post('/api/matchmaking/matches/:matchId/approve', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+
+    // Approve the match
+    await matchmakingService.approveMatch(matchId);
+
+    // Send introduction email
+    const intro = await matchmakingService.sendIntroduction(matchId);
+
+    res.json({
+      success: true,
+      introduction: intro,
+      message: 'Match approved and introduction sent!'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 5. Mark deal as closed
+app.post('/api/matchmaking/matches/:matchId/close-deal', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const { dealValue, finderFee } = req.body;
+
+    if (!finderFee) {
+      return res.status(400).json({ error: 'finderFee is required' });
+    }
+
+    const payment = await matchmakingService.markDealClosed(matchId, dealValue, finderFee);
+
+    res.json({
+      success: true,
+      payment,
+      message: `Deal closed! Expected payment: $${finderFee / 100}`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 6. Get recent introductions
+app.get('/api/matchmaking/introductions', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+
+    const introductions = await matchmakingService.getRecentIntroductions(limit);
+
+    res.json({
+      success: true,
+      introductions,
+      count: introductions.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 7. Get matchmaking stats (revenue, deals, etc.)
+app.get('/api/matchmaking/stats', async (req, res) => {
+  try {
+    const stats = await matchmakingService.getStats();
+    const revenue = await matchmakingService.getRevenueTracking();
+
+    res.json({
+      success: true,
+      stats,
+      revenue
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 8. Test email service
+app.post('/api/matchmaking/test-email', async (req, res) => {
+  try {
+    const { toEmail } = req.body;
+
+    if (!toEmail) {
+      return res.status(400).json({ error: 'toEmail is required' });
+    }
+
+    const result = await emailService.sendTestEmail(toEmail);
+
+    res.json({
+      success: result.success,
+      message: result.success ? 'Test email sent!' : 'Failed to send email',
+      resendId: result.resendId,
+      error: result.error
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

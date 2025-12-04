@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solution Brokerage - Maggie Forbes Strategies</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .gradient-bg {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s ease;
+    }
+    .pulse-dot {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+
+  <!-- Navigation -->
+  <nav class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex items-center space-x-8">
+          <h1 class="text-2xl font-bold text-gray-900">💼 Solution Brokerage</h1>
+          <div class="hidden md:flex space-x-6">
+            <a href="#revenue" class="text-gray-700 hover:text-gray-900 font-medium">Revenue</a>
+            <a href="#matches" class="text-gray-700 hover:text-gray-900 font-medium">Matches</a>
+            <a href="#relationships" class="text-gray-700 hover:text-gray-900 font-medium">Relationships</a>
+          </div>
+        </div>
+        <div class="flex items-center space-x-4">
+          <div class="flex items-center space-x-2">
+            <div class="w-2 h-2 bg-green-500 rounded-full pulse-dot"></div>
+            <span class="text-sm text-gray-600">System Active</span>
+          </div>
+          <button onclick="refreshData()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium">
+            Refresh
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- Revenue Overview -->
+    <div id="revenue" class="gradient-bg text-white p-8 rounded-xl mb-8 shadow-xl">
+      <h2 class="text-3xl font-bold mb-2">Sticky Revenue Dashboard</h2>
+      <p class="text-purple-100 mb-6">Track your monthly recurring revenue from ongoing relationships</p>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white/10 backdrop-blur-sm p-6 rounded-lg">
+          <div class="text-sm text-purple-100 mb-1">Total MRR</div>
+          <div id="total-mrr" class="text-3xl font-bold">$0</div>
+          <div class="text-xs text-purple-100 mt-1">Monthly Recurring Revenue</div>
+        </div>
+        <div class="bg-white/10 backdrop-blur-sm p-6 rounded-lg">
+          <div class="text-sm text-purple-100 mb-1">Annual ARR</div>
+          <div id="total-arr" class="text-3xl font-bold">$0</div>
+          <div class="text-xs text-purple-100 mt-1">Projected Annual Revenue</div>
+        </div>
+        <div class="bg-white/10 backdrop-blur-sm p-6 rounded-lg">
+          <div class="text-sm text-purple-100 mb-1">Active Relationships</div>
+          <div id="active-relationships" class="text-3xl font-bold">0</div>
+          <div class="text-xs text-purple-100 mt-1">Paying clients</div>
+        </div>
+        <div class="bg-white/10 backdrop-blur-sm p-6 rounded-lg">
+          <div class="text-sm text-purple-100 mb-1">Avg LTV</div>
+          <div id="avg-ltv" class="text-3xl font-bold">$0</div>
+          <div class="text-xs text-purple-100 mt-1">Per relationship</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <button onclick="showAddNeedModal()" class="bg-white p-6 rounded-lg shadow card-hover border-2 border-transparent hover:border-purple-500 text-left">
+        <div class="text-3xl mb-2">🔍</div>
+        <div class="text-lg font-bold text-gray-900 mb-1">Discover Need</div>
+        <div class="text-sm text-gray-600">Add a new business need you've found</div>
+      </button>
+
+      <button onclick="showAddProviderModal()" class="bg-white p-6 rounded-lg shadow card-hover border-2 border-transparent hover:border-purple-500 text-left">
+        <div class="text-3xl mb-2">👤</div>
+        <div class="text-lg font-bold text-gray-900 mb-1">Add Provider</div>
+        <div class="text-sm text-gray-600">Add a solution provider to your network</div>
+      </button>
+
+      <button onclick="viewMatches()" class="bg-white p-6 rounded-lg shadow card-hover border-2 border-transparent hover:border-purple-500 text-left">
+        <div class="text-3xl mb-2">🎯</div>
+        <div class="text-lg font-bold text-gray-900 mb-1">Review Matches</div>
+        <div class="text-sm text-gray-600">Approve matches and send introductions</div>
+      </button>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div class="bg-white p-6 rounded-lg shadow">
+        <h3 class="text-sm font-medium text-gray-600 mb-2">Pipeline</h3>
+        <div class="flex items-baseline space-x-2">
+          <div id="total-needs" class="text-3xl font-bold text-gray-900">0</div>
+          <div class="text-sm text-gray-500">discovered needs</div>
+        </div>
+        <div class="mt-2 text-sm">
+          <span id="active-needs" class="text-gray-600">0</span> active
+        </div>
+      </div>
+
+      <div class="bg-white p-6 rounded-lg shadow">
+        <h3 class="text-sm font-medium text-gray-600 mb-2">Network</h3>
+        <div class="flex items-baseline space-x-2">
+          <div id="total-providers" class="text-3xl font-bold text-gray-900">0</div>
+          <div class="text-sm text-gray-500">solution providers</div>
+        </div>
+        <div class="mt-2 text-sm">
+          <span id="available-providers" class="text-gray-600">0</span> available
+        </div>
+      </div>
+
+      <div class="bg-white p-6 rounded-lg shadow">
+        <h3 class="text-sm font-medium text-gray-600 mb-2">Introductions</h3>
+        <div class="flex items-baseline space-x-2">
+          <div id="total-intros" class="text-3xl font-bold text-gray-900">0</div>
+          <div class="text-sm text-gray-500">sent</div>
+        </div>
+        <div class="mt-2 text-sm">
+          <span id="deals-closed" class="text-gray-600">0</span> deals closed
+        </div>
+      </div>
+    </div>
+
+    <!-- Pending Matches -->
+    <div id="matches" class="bg-white rounded-lg shadow mb-8">
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-bold text-gray-900">🎯 Pending Matches</h3>
+        <p class="text-sm text-gray-600">Review and approve AI-scored matches</p>
+      </div>
+      <div id="pending-matches" class="divide-y divide-gray-200">
+        <div class="px-6 py-4 text-gray-500 text-center">
+          Loading matches...
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Relationships -->
+    <div id="relationships" class="bg-white rounded-lg shadow mb-8">
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-bold text-gray-900">💰 Active Relationships</h3>
+        <p class="text-sm text-gray-600">Ongoing revenue streams</p>
+      </div>
+      <div id="active-relationships-list" class="divide-y divide-gray-200">
+        <div class="px-6 py-4 text-gray-500 text-center">
+          Loading relationships...
+        </div>
+      </div>
+    </div>
+
+    <!-- At-Risk Relationships -->
+    <div id="at-risk-section" class="bg-red-50 border border-red-200 rounded-lg shadow mb-8" style="display:none;">
+      <div class="px-6 py-4 border-b border-red-200">
+        <h3 class="text-lg font-bold text-red-900">⚠️ At-Risk Relationships</h3>
+        <p class="text-sm text-red-600">These relationships need attention</p>
+      </div>
+      <div id="at-risk-list" class="divide-y divide-red-200">
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Modals -->
+  <div id="modal-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div id="modal-content" class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <!-- Modal content will be inserted here -->
+    </div>
+  </div>
+
+  <script>
+    // Initialize Supabase
+    const SUPABASE_URL = 'https://bixudsnkdeafczzqfvdq.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpeHVkc25rZGVhZmN6enFmdmRxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3NTUyOTQsImV4cCI6MjA3OTMzMTI5NH0.a3fXuai1t8CGM7XlthgcDwOS76G_KnQ4k2wWBOifVLU';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Load dashboard data
+    async function loadDashboard() {
+      try {
+        await Promise.all([
+          loadStickyRevenueStats(),
+          loadPipelineStats(),
+          loadPendingMatches(),
+          loadActiveRelationships(),
+          loadAtRiskRelationships()
+        ]);
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+      }
+    }
+
+    // Load sticky revenue stats
+    async function loadStickyRevenueStats() {
+      const { data: relationships, error } = await supabase
+        .from('sticky_revenue_relationships')
+        .select('*')
+        .eq('status', 'active');
+
+      if (relationships) {
+        let totalMRR = 0;
+        let totalLTV = 0;
+
+        relationships.forEach(rel => {
+          totalMRR += rel.monthly_recurring_revenue || 0;
+          totalLTV += rel.lifetime_value || 0;
+        });
+
+        const totalARR = totalMRR * 12;
+        const avgLTV = relationships.length > 0 ? totalLTV / relationships.length : 0;
+
+        document.getElementById('total-mrr').textContent = '$' + (totalMRR / 100).toLocaleString();
+        document.getElementById('total-arr').textContent = '$' + (totalARR / 100).toLocaleString();
+        document.getElementById('active-relationships').textContent = relationships.length;
+        document.getElementById('avg-ltv').textContent = '$' + (avgLTV / 100).toLocaleString();
+      }
+    }
+
+    // Load pipeline stats
+    async function loadPipelineStats() {
+      // Count needs
+      const { count: totalNeeds } = await supabase
+        .from('discovered_needs')
+        .select('*', { count: 'exact', head: true });
+
+      const { count: activeNeeds } = await supabase
+        .from('discovered_needs')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
+
+      // Count providers
+      const { count: totalProviders } = await supabase
+        .from('solution_providers')
+        .select('*', { count: 'exact', head: true });
+
+      const { count: availableProviders } = await supabase
+        .from('solution_providers')
+        .select('*', { count: 'exact', head: true })
+        .eq('availability_status', 'available');
+
+      // Count matches
+      const { count: totalIntros } = await supabase
+        .from('need_provider_matches')
+        .select('*', { count: 'exact', head: true })
+        .eq('match_status', 'introduced');
+
+      const { count: dealsClosed } = await supabase
+        .from('sticky_revenue_relationships')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
+
+      document.getElementById('total-needs').textContent = totalNeeds || 0;
+      document.getElementById('active-needs').textContent = activeNeeds || 0;
+      document.getElementById('total-providers').textContent = totalProviders || 0;
+      document.getElementById('available-providers').textContent = availableProviders || 0;
+      document.getElementById('total-intros').textContent = totalIntros || 0;
+      document.getElementById('deals-closed').textContent = dealsClosed || 0;
+    }
+
+    // Load pending matches
+    async function loadPendingMatches() {
+      const { data: matches, error } = await supabase
+        .from('need_provider_matches')
+        .select(`
+          *,
+          need:discovered_needs(*),
+          provider:solution_providers(*)
+        `)
+        .eq('match_status', 'potential')
+        .gte('fit_score', 7)
+        .order('fit_score', { ascending: false })
+        .limit(20);
+
+      displayPendingMatches(matches || []);
+    }
+
+    function displayPendingMatches(matches) {
+      const container = document.getElementById('pending-matches');
+
+      if (matches.length === 0) {
+        container.innerHTML = '<div class="px-6 py-8 text-gray-500 text-center">No pending matches. Discover some needs to get started!</div>';
+        return;
+      }
+
+      container.innerHTML = matches.map(match => `
+        <div class="px-6 py-4">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center space-x-2 mb-2">
+                <span class="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">
+                  ${match.fit_score}/10 fit
+                </span>
+                <span class="text-sm font-medium text-gray-900">
+                  ${match.need?.company_name || 'Unknown'} → ${match.provider?.name || 'Unknown'}
+                </span>
+              </div>
+              <p class="text-sm text-gray-600 mb-2">
+                <strong>Need:</strong> ${match.need?.problem_description?.substring(0, 100) || ''}...
+              </p>
+              <p class="text-sm text-gray-600 mb-2">
+                <strong>Solution:</strong> ${match.provider?.title || ''} - ${match.provider?.expertise_areas?.join(', ') || ''}
+              </p>
+              <p class="text-sm text-gray-500 italic">
+                ${match.ai_reasoning?.substring(0, 150) || ''}...
+              </p>
+            </div>
+            <div class="ml-4">
+              <button onclick="approveMatch('${match.id}')" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm">
+                Approve & Send Intro
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Load active relationships
+    async function loadActiveRelationships() {
+      const { data: relationships, error } = await supabase
+        .from('sticky_revenue_relationships')
+        .select('*')
+        .eq('status', 'active')
+        .order('monthly_recurring_revenue', { ascending: false });
+
+      const container = document.getElementById('active-relationships-list');
+
+      if (!relationships || relationships.length === 0) {
+        container.innerHTML = '<div class="px-6 py-8 text-gray-500 text-center">No active relationships yet. Start by discovering needs!</div>';
+        return;
+      }
+
+      container.innerHTML = relationships.map(rel => `
+        <div class="px-6 py-4">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center space-x-2 mb-2">
+                <span class="text-lg font-bold text-gray-900">${rel.client_company_name || 'Unknown'}</span>
+                <span class="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">Active</span>
+              </div>
+              <div class="grid grid-cols-4 gap-4 mt-2">
+                <div>
+                  <div class="text-xs text-gray-500">MRR</div>
+                  <div class="text-sm font-bold text-green-600">$${((rel.monthly_recurring_revenue || 0) / 100).toLocaleString()}</div>
+                </div>
+                <div>
+                  <div class="text-xs text-gray-500">LTV</div>
+                  <div class="text-sm font-bold text-purple-600">$${((rel.lifetime_value || 0) / 100).toLocaleString()}</div>
+                </div>
+                <div>
+                  <div class="text-xs text-gray-500">Started</div>
+                  <div class="text-sm text-gray-700">${new Date(rel.relationship_started_at).toLocaleDateString()}</div>
+                </div>
+                <div>
+                  <div class="text-xs text-gray-500">Next Review</div>
+                  <div class="text-sm text-gray-700">${rel.next_review_date ? new Date(rel.next_review_date).toLocaleDateString() : 'Not set'}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Load at-risk relationships
+    async function loadAtRiskRelationships() {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const { data: atRisk, error } = await supabase
+        .from('sticky_revenue_relationships')
+        .select('*')
+        .eq('status', 'active')
+        .or(`last_interaction.lt.${thirtyDaysAgo.toISOString()},health_score.lt.50`);
+
+      if (atRisk && atRisk.length > 0) {
+        document.getElementById('at-risk-section').style.display = 'block';
+        const container = document.getElementById('at-risk-list');
+
+        container.innerHTML = atRisk.map(rel => `
+          <div class="px-6 py-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="font-bold text-red-900">${rel.client_company_name || 'Unknown'}</div>
+                <div class="text-sm text-red-600">Last interaction: ${rel.last_interaction ? new Date(rel.last_interaction).toLocaleDateString() : 'Never'}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-sm text-red-700">Health: ${rel.health_score || 0}/100</div>
+                <div class="text-sm font-bold text-red-900">$${((rel.monthly_recurring_revenue || 0) / 100).toLocaleString()}/mo at risk</div>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    async function approveMatch(matchId) {
+      if (!confirm('Send introduction email to both parties?')) return;
+
+      try {
+        // Update match status to introduced
+        const { data, error } = await supabase
+          .from('need_provider_matches')
+          .update({
+            match_status: 'introduced',
+            introduced_at: new Date().toISOString()
+          })
+          .eq('id', matchId)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        alert('✅ Match approved! Introduction logged.');
+        loadDashboard();
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    function showAddNeedModal() {
+      document.getElementById('modal-content').innerHTML = `
+        <div class="p-6">
+          <h3 class="text-xl font-bold mb-4">🔍 Discover New Need</h3>
+          <form onsubmit="submitNeed(event)" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Source</label>
+              <input name="source" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder="e.g., Reddit, LinkedIn, Twitter" required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Source URL</label>
+              <input name="sourceUrl" type="url" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder="https://...">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Problem Description *</label>
+              <textarea name="rawContent" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder="Paste the original post or describe the need..." required></textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Person Name</label>
+                <input name="personName" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Person Email</label>
+                <input name="personEmail" type="email" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+              <input name="companyName" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+            <div class="flex space-x-3 pt-4">
+              <button type="submit" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium">
+                Discover Need
+              </button>
+              <button type="button" onclick="closeModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      `;
+      document.getElementById('modal-overlay').classList.remove('hidden');
+    }
+
+    function showAddProviderModal() {
+      document.getElementById('modal-content').innerHTML = `
+        <div class="p-6">
+          <h3 class="text-xl font-bold mb-4">👤 Add Solution Provider</h3>
+          <form onsubmit="submitProvider(event)" class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                <input name="name" class="w-full px-3 py-2 border border-gray-300 rounded-lg" required>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input name="email" type="email" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Company</label>
+                <input name="company" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                <input name="title" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="e.g., Fractional CMO">
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Expertise Areas * (comma-separated)</label>
+              <input name="expertiseAreas" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder="e.g., marketing, b2b, saas, growth" required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Industries (comma-separated)</label>
+              <input name="industries" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder="e.g., saas, fintech, healthcare">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Profile URL</label>
+              <input name="profileUrl" type="url" class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder="LinkedIn, website, etc.">
+            </div>
+            <div class="flex space-x-3 pt-4">
+              <button type="submit" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium">
+                Add Provider
+              </button>
+              <button type="button" onclick="closeModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      `;
+      document.getElementById('modal-overlay').classList.remove('hidden');
+    }
+
+    async function submitNeed(e) {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const formObject = Object.fromEntries(formData);
+
+      try {
+        // Insert discovered need
+        const { data: need, error } = await supabase
+          .from('discovered_needs')
+          .insert({
+            source: formObject.source,
+            source_url: formObject.sourceUrl,
+            raw_content: formObject.rawContent,
+            person_name: formObject.personName,
+            person_email: formObject.personEmail,
+            company_name: formObject.companyName,
+            status: 'active',
+            discovered_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        alert('✅ Need discovered! Check pending matches for AI suggestions.');
+        closeModal();
+        loadDashboard();
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    async function submitProvider(e) {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const formObject = Object.fromEntries(formData);
+
+      // Convert comma-separated strings to arrays
+      const expertiseAreas = formObject.expertiseAreas.split(',').map(s => s.trim());
+      const industries = formObject.industries ? formObject.industries.split(',').map(s => s.trim()) : [];
+
+      try {
+        // Insert solution provider
+        const { data: provider, error } = await supabase
+          .from('solution_providers')
+          .insert({
+            name: formObject.name,
+            email: formObject.email,
+            company: formObject.company,
+            title: formObject.title,
+            expertise_areas: expertiseAreas,
+            industries_served: industries,
+            profile_url: formObject.profileUrl,
+            availability_status: 'available',
+            added_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        alert('✅ Provider added to your network!');
+        closeModal();
+        loadDashboard();
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('modal-overlay').classList.add('hidden');
+    }
+
+    function refreshData() {
+      loadDashboard();
+    }
+
+    function viewMatches() {
+      window.location.hash = '#matches';
+      loadDashboard();
+    }
+
+    // Load dashboard on page load
+    loadDashboard();
+
+    // Refresh every 30 seconds
+    setInterval(loadDashboard, 30000);
+  </script>
+
+</body>
+</html>

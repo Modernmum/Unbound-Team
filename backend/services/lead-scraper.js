@@ -1,3 +1,10 @@
+// ⚠️ WARNING: This file was FIXED on 2025-12-04
+//
+// REMOVED: All hardcoded mock/placeholder names and company data
+// NOW: Only returns REAL scraped data or empty arrays (never fake data)
+//
+// See: NEVER-USE-FAKE-DATA.md for safeguards
+//
 // Lead Scraper - Web scraping for lead generation
 // Scrapes indie forums, blogs, directories for potential customers
 
@@ -116,33 +123,81 @@ Format as JSON.`;
   }
 
   async scrapeIndieHackers(strategy) {
-    // Mock data for now - in production, use real scraping
-    return [
-      {
-        name: 'John Doe',
-        company: 'Example SaaS',
-        email: null, // Will be enriched
-        source: 'Indie Hackers',
-        industry: strategy.criteria?.industry,
-        url: 'https://indiehackers.com/example',
-        description: 'Building a SaaS in the ' + strategy.criteria?.industry + ' space'
-      }
-    ];
+    // REAL Indie Hackers scraping
+    try {
+      const url = 'https://www.indiehackers.com/products';
+      const response = await axios.get(url, {
+        headers: { 'User-Agent': this.userAgent },
+        timeout: 10000
+      });
+
+      const $ = cheerio.load(response.data);
+      const leads = [];
+
+      // Parse product cards
+      $('.product-card').each((i, elem) => {
+        const name = $(elem).find('.founder-name').text().trim();
+        const company = $(elem).find('.product-name').text().trim();
+        const description = $(elem).find('.description').text().trim();
+        const url = $(elem).find('a').attr('href');
+
+        if (company && description) {
+          leads.push({
+            name: name || company,
+            company,
+            email: null, // Will be enriched
+            source: 'Indie Hackers',
+            industry: strategy.criteria?.industry,
+            url: 'https://indiehackers.com' + url,
+            description
+          });
+        }
+      });
+
+      return leads;
+    } catch (error) {
+      console.error('   Indie Hackers real scraping failed:', error.message);
+      return []; // Return empty instead of fake data
+    }
   }
 
   async scrapeProductHunt(strategy) {
-    // Mock data for now
-    return [
-      {
-        name: 'Jane Smith',
-        company: 'Product Example',
-        email: null,
-        source: 'Product Hunt',
-        industry: strategy.criteria?.industry,
-        url: 'https://producthunt.com/example',
-        description: 'Launched product in ' + strategy.criteria?.industry
-      }
-    ];
+    // REAL Product Hunt scraping (public data only)
+    try {
+      const url = 'https://www.producthunt.com/';
+      const response = await axios.get(url, {
+        headers: { 'User-Agent': this.userAgent },
+        timeout: 10000
+      });
+
+      const $ = cheerio.load(response.data);
+      const leads = [];
+
+      // Parse product cards
+      $('[data-test="post-item"]').each((i, elem) => {
+        const company = $(elem).find('[data-test="post-name"]').text().trim();
+        const description = $(elem).find('[data-test="post-tagline"]').text().trim();
+        const maker = $(elem).find('[data-test="maker-name"]').text().trim();
+        const url = $(elem).find('a').first().attr('href');
+
+        if (company && description) {
+          leads.push({
+            name: maker || company,
+            company,
+            email: null,
+            source: 'Product Hunt',
+            industry: strategy.criteria?.industry,
+            url: 'https://producthunt.com' + url,
+            description
+          });
+        }
+      });
+
+      return leads;
+    } catch (error) {
+      console.error('   Product Hunt real scraping failed:', error.message);
+      return []; // Return empty instead of fake data
+    }
   }
 
   // ============================================================================

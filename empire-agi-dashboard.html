@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Empire AGI Dashboard - Unbound.team</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .gradient-text {
+      background: linear-gradient(135deg, #00F0FF 0%, #0080FF 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .neon-glow {
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.4), 0 0 40px rgba(0, 128, 255, 0.2);
+    }
+    .pulse-dot {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .health-excellent { background: linear-gradient(135deg, #00FF88 0%, #00AA55 100%); }
+    .health-good { background: linear-gradient(135deg, #FFB800 0%, #FF8800 100%); }
+    .health-poor { background: linear-gradient(135deg, #FF4444 0%, #CC0000 100%); }
+  </style>
+</head>
+<body class="bg-[#0A0E27] text-white">
+
+  <!-- Navigation -->
+  <nav class="bg-[#1a1f3a]/80 backdrop-blur-lg border-b border-cyan-500/20 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-20">
+        <div class="flex items-center space-x-8">
+          <a href="/" class="text-3xl font-black gradient-text">🧠 EMPIRE AGI</a>
+        </div>
+        <div class="flex items-center space-x-4">
+          <div class="flex items-center space-x-2">
+            <div class="w-2 h-2 bg-green-400 rounded-full pulse-dot"></div>
+            <span class="text-sm text-gray-400">AGI Running</span>
+          </div>
+          <span id="cycle-count" class="text-sm text-gray-400">Cycle #0</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- Empire Overview Banner -->
+    <div class="bg-gradient-to-r from-purple-500/10 to-blue-600/10 border border-purple-500/30 p-6 rounded-xl mb-8">
+      <h2 class="text-2xl font-black gradient-text mb-2">🧠 Empire AGI - Autonomous Control System</h2>
+      <p class="text-gray-300 mb-2">
+        One AGI autonomously running two businesses 24/7. Real-time monitoring, learning, and optimization.
+      </p>
+      <div class="flex items-center space-x-4 text-sm">
+        <div class="flex items-center text-green-400">
+          <span class="mr-2">✓</span> Maggie Forbes Strategies
+        </div>
+        <div class="flex items-center text-green-400">
+          <span class="mr-2">✓</span> Growth Manager Pro
+        </div>
+        <div class="flex items-center text-cyan-400">
+          <span class="mr-2">⚡</span> Cross-business learning active
+        </div>
+      </div>
+    </div>
+
+    <!-- Business Health Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+
+      <!-- Maggie Forbes Card -->
+      <div class="bg-[#1a1f3a] p-6 rounded-xl border border-blue-500/30">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="text-xl font-bold text-blue-400">💼 Maggie Forbes Strategies</h3>
+            <p class="text-sm text-gray-400">High-End Business Consulting</p>
+          </div>
+          <div class="text-right">
+            <div id="mf-health" class="text-3xl font-black">50</div>
+            <div class="text-xs text-gray-400">Health Score</div>
+          </div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div class="bg-[#0A0E27] p-3 rounded-lg">
+            <div class="text-xs text-gray-400">Leads</div>
+            <div id="mf-leads" class="text-lg font-bold text-cyan-400">0</div>
+            <div class="text-xs text-gray-500">Target: 50</div>
+          </div>
+          <div class="bg-[#0A0E27] p-3 rounded-lg">
+            <div class="text-xs text-gray-400">Conversions</div>
+            <div id="mf-conversions" class="text-lg font-bold text-green-400">0</div>
+            <div class="text-xs text-gray-500">Target: 10</div>
+          </div>
+          <div class="bg-[#0A0E27] p-3 rounded-lg">
+            <div class="text-xs text-gray-400">Revenue</div>
+            <div id="mf-revenue" class="text-lg font-bold text-purple-400">$0</div>
+            <div class="text-xs text-gray-500">Goal: $250K/mo</div>
+          </div>
+          <div class="bg-[#0A0E27] p-3 rounded-lg">
+            <div class="text-xs text-gray-400">Trend</div>
+            <div id="mf-trend" class="text-lg font-bold">stable</div>
+          </div>
+        </div>
+
+        <!-- Current Strategy -->
+        <div class="bg-purple-500/10 border border-purple-500/30 p-3 rounded-lg">
+          <div class="text-xs text-purple-400 mb-1">Current Strategy</div>
+          <div id="mf-strategy" class="text-sm text-white font-semibold">bootstrap_with_existing_clients</div>
+        </div>
+      </div>
+
+      <!-- Growth Manager Pro Card -->
+      <div class="bg-[#1a1f3a] p-6 rounded-xl border border-purple-500/30">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="text-xl font-bold text-purple-400">🚀 Growth Manager Pro</h3>
+            <p class="text-sm text-gray-400">SaaS for Solopreneurs</p>
+          </div>
+          <div class="text-right">
+            <div id="gmp-health" class="text-3xl font-black">50</div>
+            <div class="text-xs text-gray-400">Health Score</div>
+          </div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div class="bg-[#0A0E27] p-3 rounded-lg">
+            <div class="text-xs text-gray-400">Signups</div>
+            <div id="gmp-signups" class="text-lg font-bold text-cyan-400">0</div>
+            <div class="text-xs text-gray-500">Target: 200</div>
+          </div>
+          <div class="bg-[#0A0E27] p-3 rounded-lg">
+            <div class="text-xs text-gray-400">MRR</div>
+            <div id="gmp-mrr" class="text-lg font-bold text-green-400">$0</div>
+            <div class="text-xs text-gray-500">Goal: $60K/mo</div>
+          </div>
+          <div class="bg-[#0A0E27] p-3 rounded-lg">
+            <div class="text-xs text-gray-400">Churn</div>
+            <div id="gmp-churn" class="text-lg font-bold text-yellow-400">0%</div>
+            <div class="text-xs text-gray-500">Target: &lt;5%</div>
+          </div>
+          <div class="bg-[#0A0E27] p-3 rounded-lg">
+            <div class="text-xs text-gray-400">Trend</div>
+            <div id="gmp-trend" class="text-lg font-bold">stable</div>
+          </div>
+        </div>
+
+        <!-- Current Strategy -->
+        <div class="bg-purple-500/10 border border-purple-500/30 p-3 rounded-lg">
+          <div class="text-xs text-purple-400 mb-1">Current Strategy</div>
+          <div id="gmp-strategy" class="text-sm text-white font-semibold">student_onboarding</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AGI Activity Sections -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+      <!-- Recent Decisions -->
+      <div class="bg-[#1a1f3a] p-6 rounded-xl border border-cyan-500/20">
+        <h3 class="text-xl font-bold mb-4">🎯 Recent AGI Decisions</h3>
+        <div id="recent-decisions" class="space-y-3 max-h-96 overflow-y-auto">
+          <div class="text-gray-500 text-sm text-center py-8">Loading decisions...</div>
+        </div>
+      </div>
+
+      <!-- Learned Insights -->
+      <div class="bg-[#1a1f3a] p-6 rounded-xl border border-cyan-500/20">
+        <h3 class="text-xl font-bold mb-4">💡 Learned Insights</h3>
+        <div id="learned-insights" class="space-y-3 max-h-96 overflow-y-auto">
+          <div class="text-gray-500 text-sm text-center py-8">Loading insights...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Goals Progress -->
+    <div class="bg-[#1a1f3a] p-6 rounded-xl border border-cyan-500/20 mb-8">
+      <h3 class="text-xl font-bold mb-4">🎯 Goals Progress</h3>
+      <div id="goals-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="text-gray-500 text-sm text-center py-8">Loading goals...</div>
+      </div>
+    </div>
+
+    <!-- Knowledge Transfers -->
+    <div class="bg-[#1a1f3a] p-6 rounded-xl border border-cyan-500/20 mb-8">
+      <h3 class="text-xl font-bold mb-4">🔄 Cross-Business Knowledge Transfers</h3>
+      <div id="knowledge-transfers" class="space-y-3">
+        <div class="text-gray-500 text-sm text-center py-8">Loading transfers...</div>
+      </div>
+    </div>
+
+    <!-- Sticky Revenue Metrics -->
+    <div class="bg-gradient-to-r from-green-500/10 to-emerald-600/10 border border-green-500/30 p-6 rounded-xl mb-8">
+      <h3 class="text-xl font-bold text-green-400 mb-4">💰 Sticky Revenue Tracking</h3>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-[#0A0E27] p-4 rounded-lg">
+          <div class="text-xs text-gray-400">Total MRR</div>
+          <div id="sticky-mrr" class="text-2xl font-black text-green-400">$0</div>
+          <div class="text-xs text-gray-500 mt-1">Monthly Recurring</div>
+        </div>
+        <div class="bg-[#0A0E27] p-4 rounded-lg">
+          <div class="text-xs text-gray-400">Annual ARR</div>
+          <div id="sticky-arr" class="text-2xl font-black text-emerald-400">$0</div>
+          <div class="text-xs text-gray-500 mt-1">Projected Annual</div>
+        </div>
+        <div class="bg-[#0A0E27] p-4 rounded-lg">
+          <div class="text-xs text-gray-400">Active Deals</div>
+          <div id="sticky-relationships" class="text-2xl font-black text-cyan-400">0</div>
+          <div class="text-xs text-gray-500 mt-1">Ongoing relationships</div>
+        </div>
+        <div class="bg-[#0A0E27] p-4 rounded-lg">
+          <div class="text-xs text-gray-400">Avg LTV</div>
+          <div id="sticky-ltv" class="text-2xl font-black text-purple-400">$0</div>
+          <div class="text-xs text-gray-500 mt-1">Per relationship</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div class="bg-[#1a1f3a] p-6 rounded-xl border border-cyan-500/20">
+        <div class="text-gray-400 text-sm mb-2">Total Decisions</div>
+        <div id="total-decisions" class="text-3xl font-black gradient-text">0</div>
+      </div>
+      <div class="bg-[#1a1f3a] p-6 rounded-xl border border-cyan-500/20">
+        <div class="text-gray-400 text-sm mb-2">Success Rate</div>
+        <div id="success-rate" class="text-3xl font-black text-green-400">0%</div>
+      </div>
+      <div class="bg-[#1a1f3a] p-6 rounded-xl border border-cyan-500/20">
+        <div class="text-gray-400 text-sm mb-2">Insights Discovered</div>
+        <div id="insights-count" class="text-3xl font-black text-purple-400">0</div>
+      </div>
+      <div class="bg-[#1a1f3a] p-6 rounded-xl border border-cyan-500/20">
+        <div class="text-gray-400 text-sm mb-2">Strategies Active</div>
+        <div id="strategies-count" class="text-3xl font-black text-cyan-400">0</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Initialize Supabase
+    const SUPABASE_URL = 'https://bixudsnkdeafczzqfvdq.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpeHVkc25rZGVhZmN6enFmdmRxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3NTUyOTQsImV4cCI6MjA3OTMzMTI5NH0.a3fXuai1t8CGM7XlthgcDwOS76G_KnQ4k2wWBOifVLU';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Auto-refresh interval (30 seconds)
+    let refreshInterval;
+
+    // Load all data
+    async function loadDashboard() {
+      await Promise.all([
+        loadBusinessHealth(),
+        loadRecentDecisions(),
+        loadInsights(),
+        loadGoals(),
+        loadKnowledgeTransfers(),
+        loadStats(),
+        loadStickyRevenue()
+      ]);
+    }
+
+    // Load business health
+    async function loadBusinessHealth() {
+      const { data, error } = await supabase
+        .from('agi_business_state')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(2);
+
+      if (data) {
+        data.forEach(state => {
+          const prefix = state.business_name === 'maggie-forbes' ? 'mf' : 'gmp';
+
+          document.getElementById(`${prefix}-health`).textContent = state.health_score || 50;
+          document.getElementById(`${prefix}-trend`).textContent = state.trend || 'stable';
+          document.getElementById(`${prefix}-strategy`).textContent = state.current_strategy || 'bootstrap';
+
+          // Update KPIs
+          if (state.kpis) {
+            if (state.business_name === 'maggie-forbes') {
+              document.getElementById('mf-leads').textContent = state.kpis.leads || 0;
+              document.getElementById('mf-conversions').textContent = state.kpis.conversions || 0;
+              document.getElementById('mf-revenue').textContent = '$' + (state.kpis.revenue || 0).toLocaleString();
+            } else {
+              document.getElementById('gmp-signups').textContent = state.kpis.signups || 0;
+              document.getElementById('gmp-mrr').textContent = '$' + (state.kpis.mrr || 0).toLocaleString();
+              document.getElementById('gmp-churn').textContent = (state.kpis.churn || 0) + '%';
+            }
+          }
+        });
+      }
+    }
+
+    // Load recent decisions
+    async function loadRecentDecisions() {
+      const { data, error } = await supabase
+        .from('agi_decisions')
+        .select('*')
+        .order('executed_at', { ascending: false })
+        .limit(10);
+
+      const container = document.getElementById('recent-decisions');
+
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="text-gray-500 text-sm text-center py-8">No decisions yet. AGI will make its first decision soon!</div>';
+        return;
+      }
+
+      container.innerHTML = data.map(decision => {
+        const outcomeColor = decision.outcome === 'success' ? 'text-green-400' :
+                            decision.outcome === 'failure' ? 'text-red-400' :
+                            'text-yellow-400';
+        const businessColor = decision.business_name === 'maggie-forbes' ? 'text-blue-400' : 'text-purple-400';
+
+        return `
+          <div class="bg-[#0A0E27] p-4 rounded-lg border border-cyan-500/10">
+            <div class="flex items-center justify-between mb-2">
+              <span class="${businessColor} text-xs font-semibold">${decision.business_name}</span>
+              <span class="${outcomeColor} text-xs">${decision.outcome || 'pending'}</span>
+            </div>
+            <div class="text-sm font-semibold mb-1">${decision.decision}</div>
+            <div class="text-xs text-gray-400 mb-2">${decision.reasoning}</div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-gray-500">${decision.action_type}</span>
+              <span class="text-gray-500">${new Date(decision.executed_at).toLocaleString()}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Load insights
+    async function loadInsights() {
+      const { data, error } = await supabase
+        .from('agi_insights')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      const container = document.getElementById('learned-insights');
+
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="text-gray-500 text-sm text-center py-8">No insights discovered yet. AGI is learning!</div>';
+        return;
+      }
+
+      container.innerHTML = data.map(insight => {
+        const impactColor = insight.impact_level === 'critical' ? 'text-red-400' :
+                           insight.impact_level === 'high' ? 'text-orange-400' :
+                           'text-yellow-400';
+
+        return `
+          <div class="bg-[#0A0E27] p-4 rounded-lg border border-purple-500/10">
+            <div class="flex items-center justify-between mb-2">
+              <span class="${impactColor} text-xs font-semibold uppercase">${insight.impact_level}</span>
+              <span class="text-cyan-400 text-xs">${insight.confidence_score}% confidence</span>
+            </div>
+            <div class="text-sm font-semibold mb-1">${insight.title}</div>
+            <div class="text-xs text-gray-400">${insight.description}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Load goals
+    async function loadGoals() {
+      const { data, error } = await supabase
+        .from('agi_goals')
+        .select('*')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+      const container = document.getElementById('goals-list');
+
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="text-gray-500 text-sm text-center py-8">No active goals</div>';
+        return;
+      }
+
+      container.innerHTML = data.map(goal => {
+        const progress = goal.progress_percent || 0;
+        const progressColor = progress >= 75 ? 'bg-green-500' : progress >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+        const businessColor = goal.business_name === 'maggie-forbes' ? 'text-blue-400' : 'text-purple-400';
+
+        return `
+          <div class="bg-[#0A0E27] p-4 rounded-lg border border-cyan-500/10">
+            <div class="flex items-center justify-between mb-2">
+              <span class="${businessColor} text-xs font-semibold">${goal.business_name}</span>
+              <span class="text-cyan-400 text-xs">${progress.toFixed(0)}%</span>
+            </div>
+            <div class="text-sm font-semibold mb-2">${goal.title}</div>
+            <div class="w-full bg-gray-700 rounded-full h-2">
+              <div class="${progressColor} h-2 rounded-full transition-all" style="width: ${progress}%"></div>
+            </div>
+            <div class="flex items-center justify-between text-xs text-gray-500 mt-2">
+              <span>${goal.current_value || 0} / ${goal.target_value}</span>
+              <span>${new Date(goal.deadline).toLocaleDateString()}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Load knowledge transfers
+    async function loadKnowledgeTransfers() {
+      const { data, error } = await supabase
+        .from('agi_knowledge_transfer')
+        .select('*')
+        .order('transferred_at', { ascending: false })
+        .limit(5);
+
+      const container = document.getElementById('knowledge-transfers');
+
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="text-gray-500 text-sm text-center py-8">No knowledge transfers yet</div>';
+        return;
+      }
+
+      container.innerHTML = data.map(transfer => {
+        const statusColor = transfer.status === 'success' ? 'text-green-400' :
+                           transfer.status === 'failure' ? 'text-red-400' :
+                           'text-yellow-400';
+
+        return `
+          <div class="bg-[#0A0E27] p-4 rounded-lg border border-cyan-500/10">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center space-x-2">
+                <span class="text-xs text-gray-400">${transfer.source_business}</span>
+                <span class="text-cyan-400">→</span>
+                <span class="text-xs text-gray-400">${transfer.transferred_to}</span>
+              </div>
+              <span class="${statusColor} text-xs font-semibold">${transfer.status}</span>
+            </div>
+            <div class="text-sm font-semibold mb-1">${transfer.source_strategy}</div>
+            <div class="text-xs text-gray-400">${transfer.conclusion || 'Testing in progress...'}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Load sticky revenue metrics
+    async function loadStickyRevenue() {
+      const { data: relationships, error } = await supabase
+        .from('sticky_revenue_relationships')
+        .select('*')
+        .eq('status', 'active');
+
+      if (relationships && relationships.length > 0) {
+        let totalMRR = 0;
+        let totalLTV = 0;
+
+        relationships.forEach(rel => {
+          totalMRR += rel.monthly_recurring_revenue || 0;
+          totalLTV += rel.lifetime_value || 0;
+        });
+
+        const totalARR = totalMRR * 12;
+        const avgLTV = relationships.length > 0 ? totalLTV / relationships.length : 0;
+
+        document.getElementById('sticky-mrr').textContent = '$' + (totalMRR / 100).toLocaleString();
+        document.getElementById('sticky-arr').textContent = '$' + (totalARR / 100).toLocaleString();
+        document.getElementById('sticky-relationships').textContent = relationships.length;
+        document.getElementById('sticky-ltv').textContent = '$' + (avgLTV / 100).toLocaleString();
+      }
+    }
+
+    // Load stats
+    async function loadStats() {
+      // Total decisions
+      const { count: totalDecisions } = await supabase
+        .from('agi_decisions')
+        .select('*', { count: 'exact', head: true });
+      document.getElementById('total-decisions').textContent = totalDecisions || 0;
+
+      // Success rate
+      const { data: decisions } = await supabase
+        .from('agi_decisions')
+        .select('outcome')
+        .not('completed_at', 'is', null);
+
+      if (decisions && decisions.length > 0) {
+        const successes = decisions.filter(d => d.outcome === 'success').length;
+        const rate = (successes / decisions.length * 100).toFixed(0);
+        document.getElementById('success-rate').textContent = rate + '%';
+      }
+
+      // Insights count
+      const { count: insightsCount } = await supabase
+        .from('agi_insights')
+        .select('*', { count: 'exact', head: true });
+      document.getElementById('insights-count').textContent = insightsCount || 0;
+
+      // Active strategies
+      const { count: strategiesCount } = await supabase
+        .from('agi_strategies')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
+      document.getElementById('strategies-count').textContent = strategiesCount || 0;
+
+      // Cycle count
+      const { count: cycleCount } = await supabase
+        .from('agi_business_state')
+        .select('*', { count: 'exact', head: true });
+      document.getElementById('cycle-count').textContent = 'Cycle #' + (cycleCount || 0);
+    }
+
+    // Initialize
+    loadDashboard();
+
+    // Auto-refresh every 30 seconds
+    refreshInterval = setInterval(loadDashboard, 30000);
+
+    // Manual refresh button
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'r' && e.ctrlKey) {
+        e.preventDefault();
+        loadDashboard();
+      }
+    });
+  </script>
+
+</body>
+</html>

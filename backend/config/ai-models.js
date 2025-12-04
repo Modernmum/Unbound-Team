@@ -31,15 +31,17 @@ module.exports = {
       priority: 2
     },
 
+    // ANTHROPIC - DISABLED (NO COSTS)
     'claude-haiku': {
       name: 'Claude 3.5 Haiku',
       provider: 'anthropic',
-      inputCostPer1M: 0.25,
-      outputCostPer1M: 1.25,
-      dailyLimit: null,
-      rateLimit: 50,
-      useCases: ['fast-decisions', 'content', 'analysis'],
-      priority: 3
+      inputCostPer1M: 0.00, // DISABLED - No Anthropic costs
+      outputCostPer1M: 0.00, // DISABLED - No Anthropic costs
+      dailyLimit: 0, // DISABLED
+      rateLimit: 0,
+      useCases: [],
+      priority: 999, // Never use
+      enabled: false
     },
 
     // MEDIUM TIER
@@ -65,26 +67,27 @@ module.exports = {
       priority: 5
     },
 
-    // EXPENSIVE TIER (use sparingly)
+    // ANTHROPIC - DISABLED (NO COSTS)
     'claude-sonnet': {
       name: 'Claude 3.5 Sonnet',
       provider: 'anthropic',
-      inputCostPer1M: 3.00,
-      outputCostPer1M: 15.00,
-      dailyLimit: null,
-      rateLimit: 50,
-      useCases: ['complex-problems', 'coding', 'strategic'],
-      priority: 6 // Use last
+      inputCostPer1M: 0.00, // DISABLED - No Anthropic costs
+      outputCostPer1M: 0.00, // DISABLED - No Anthropic costs
+      dailyLimit: 0, // DISABLED
+      rateLimit: 0,
+      useCases: [],
+      priority: 999, // Never use
+      enabled: false
     }
   },
 
-  // Task to Model Mapping (cheapest first)
+  // Task to Model Mapping (NO ANTHROPIC - cheapest first)
   taskRouting: {
-    'content-generation': ['gemini', 'gpt-4o-mini', 'claude-haiku'],
+    'content-generation': ['gemini', 'gpt-4o-mini'],
     'lead-research': ['gemini', 'perplexity', 'gpt-4o-mini'],
-    'market-analysis': ['perplexity', 'gpt-4o', 'claude-sonnet'],
-    'code-generation': ['gpt-4o-mini', 'claude-sonnet'],
-    'strategy': ['gpt-4o', 'claude-sonnet'],
+    'market-analysis': ['perplexity', 'gpt-4o', 'gemini'],
+    'code-generation': ['gpt-4o-mini', 'gemini'],
+    'strategy': ['gpt-4o', 'gemini'],
     'quick-task': ['gemini', 'gpt-4o-mini'],
     'deep-research': ['perplexity', 'gpt-4o']
   }

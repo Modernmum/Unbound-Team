@@ -356,28 +356,11 @@ class BotTestingService {
    * Execute automatic fix via engineering bot
    */
   async executeAutoFix(client, issue, fixRequest) {
-    console.log(`  🤖 Engineering bot executing fix...`);
+    console.log(`  🤖 Smart Engineering Bot executing fix...`);
 
     try {
-      // Route to appropriate fix based on issue type
-      let fixResult;
-
-      switch (issue.issue_type) {
-        case 'database':
-          fixResult = await gmpAutoFixer.fixOrphanedRecords();
-          break;
-
-        case 'performance':
-          fixResult = await gmpAutoFixer.optimizeDatabase();
-          break;
-
-        case 'broken-ui':
-          fixResult = { success: false, details: 'UI fixes require manual intervention' };
-          break;
-
-        default:
-          fixResult = { success: false, details: 'No automated fix available' };
-      }
+      // Use AI-powered smart fixer with codebase knowledge + learning
+      const fixResult = await gmpAutoFixer.executeSmartFix(client, issue);
 
       // Update fix request
       await supabase

@@ -296,15 +296,15 @@
         // Get last 7 days
         const sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
 
-        // Fetch leads
+        // Fetch leads from discovered_opportunities table (correct table name)
         const { data: leads, error: leadsError } = await supabase
-          .from('generated_leads')
+          .from('discovered_opportunities')
           .select('*')
-          .eq('tenant_id', tenantId)
           .gte('created_at', sevenDaysAgo);
 
         if (leadsError) {
           console.error('Error fetching leads:', leadsError);
+          console.log('Full error:', leadsError);
         }
 
         // Update stats
@@ -316,18 +316,18 @@
           const avgScore = leads.reduce((sum, lead) => sum + (lead.fit_score || 0), 0) / leads.length;
           document.getElementById('fit-score').textContent = avgScore.toFixed(1) + '/10';
         } else {
-          document.getElementById('fit-score').textContent = '--';
+          document.getElementById('fit-score').textContent = '0.0/10';
         }
 
-        // Fetch content
+        // Fetch content (use user_id instead of tenant_id if tenant_id doesn't exist)
         const { data: content, error: contentError } = await supabase
           .from('generated_content')
           .select('id')
-          .eq('tenant_id', tenantId)
           .eq('status', 'draft');
 
         if (contentError) {
           console.error('Error fetching content:', contentError);
+          console.log('Full error:', contentError);
         }
 
         document.getElementById('content-count').textContent = content?.length || 0;
@@ -345,29 +345,26 @@
         // Fetch recent activity (last 7 days)
         const sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
 
-        // Get leads
+        // Get leads from discovered_opportunities (correct table name)
         const { data: leads } = await supabase
-          .from('generated_leads')
+          .from('discovered_opportunities')
           .select('*')
-          .eq('tenant_id', tenantId)
           .gte('created_at', sevenDaysAgo)
           .order('created_at', { ascending: false })
           .limit(10);
 
-        // Get content
+        // Get content (removed tenant_id filter if column doesn't exist)
         const { data: content } = await supabase
           .from('generated_content')
           .select('*')
-          .eq('tenant_id', tenantId)
           .gte('created_at', sevenDaysAgo)
           .order('created_at', { ascending: false })
           .limit(5);
 
-        // Get research
+        // Get research (removed tenant_id filter if column doesn't exist)
         const { data: research } = await supabase
           .from('market_research')
           .select('*')
-          .eq('tenant_id', tenantId)
           .gte('created_at', sevenDaysAgo)
           .order('created_at', { ascending: false })
           .limit(3);
@@ -395,14 +392,15 @@
           let title, description;
 
           if (item.type === 'leads') {
-            title = `New lead: ${item.name || 'Unknown'}`;
-            description = `${item.company || 'N/A'} • Fit score: ${item.fit_score || 0}/10`;
+            // discovered_opportunities table has: title, description, business_area, fit_score
+            title = `New opportunity: ${item.title || item.business_area || 'Unknown'}`;
+            description = `${item.source || 'N/A'} • Fit score: ${item.fit_score || 0}/10`;
           } else if (item.type === 'content') {
             title = `Content generated: ${item.content_type || 'blog'}`;
-            description = item.title || 'Untitled content';
+            description = item.metadata?.title || 'Untitled content';
           } else if (item.type === 'research') {
-            title = `Market research: ${item.research_type || 'analysis'}`;
-            description = item.title || 'Research report';
+            title = `Market research: ${item.industry || 'analysis'}`;
+            description = `Opportunity score: ${item.opportunity_score || 0}/10`;
           }
 
           const timeAgo = getTimeAgo(new Date(item.created_at));

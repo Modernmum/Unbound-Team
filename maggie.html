@@ -82,22 +82,23 @@
     const SUPABASE_URL = 'https://bixudsnkdeafczzqfvdq.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpeHVkc25rZGVhZmN6enFmdmRxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2Mzc1NTI5NCwiZXhwIjoyMDc5MzMxMjk0fQ.eGuTmmYqpS2SPaRN9Xz4Tryy0Ndw_td91ylc07TgJi0';
 
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const { createClient } = supabase;
+    const client = createClient(SUPABASE_URL, SUPABASE_KEY);
 
     async function loadData() {
       try {
-        const { data: tests, error } = await supabase
+        const { data: tests, error } = await client
           .from('bot_test_results')
           .select('*')
           .eq('client_id', '28022115-e4de-4c8c-90c8-43dcae10042a')
-          .order('test_date', { ascending: false });
+          .order('created_at', { ascending: false });
 
         if (error) throw error;
 
         // Update stats
         document.getElementById('tests').textContent = tests.length;
         if (tests.length > 0) {
-          document.getElementById('rating').textContent = tests[0].overall_rating + '/10';
+          document.getElementById('rating').textContent = tests[0].rating + '/10';
           document.getElementById('health').textContent = '100%';
         }
 
@@ -106,13 +107,13 @@
           <div class="test-card">
             <div class="test-header">
               <div>
-                <div class="persona">${test.persona_name}</div>
-                <div class="date">${new Date(test.test_date).toLocaleString()}</div>
+                <div class="persona">${test.bot_persona}</div>
+                <div class="date">${new Date(test.created_at).toLocaleString()}</div>
               </div>
-              <div class="rating">${test.overall_rating}/10</div>
+              <div class="rating">${test.rating}/10</div>
             </div>
             <div style="color: #22543d; background: #f0fff4; padding: 12px; border-radius: 8px;">
-              ✅ Test completed successfully - No critical issues found
+              ✅ Test completed successfully - Rating: ${test.rating}/10
             </div>
           </div>
         `).join('');

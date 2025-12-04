@@ -1,5 +1,7 @@
 // Queue Worker - Processes jobs from Supabase queue
 const queue = require('./supabase-queue');
+const executiveLeadFinder = require('./executive-lead-finder');
+const leadScraper = require('./lead-scraper');
 
 class QueueWorker {
   constructor() {
@@ -10,55 +12,70 @@ class QueueWorker {
 
   setupProcessors() {
     // Lead Generation Processor
-    this.processors.leadGeneration = async (jobData) => {
+    this.processors['lead-generation'] = async (jobData) => {
       console.log('📊 Processing lead generation job...');
 
       try {
-        // Simplified lead generation for MVP
-        const { targetIndustry, criteria } = jobData;
-        const count = criteria?.count || 10;
+        const { business, targetIndustry, criteria } = jobData;
+        const count = criteria?.count || 20;
 
-        // Generate sample leads based on industry
-        const leads = [];
-        for (let i = 0; i < count; i++) {
-          leads.push({
-            name: `Potential Client ${i + 1}`,
-            company: `${targetIndustry} Business ${i + 1}`,
-            source: 'Reddit r/Entrepreneur',
-            url: `https://reddit.com/r/Entrepreneur/sample${i}`,
-            description: `Looking for ${targetIndustry} solutions`,
-            painPoints: ['scaling challenges', 'operational efficiency', 'strategic growth'],
-            fitScore: 7 + Math.floor(Math.random() * 3), // 7-9 score
-            outreachTip: `Focus on demonstrating ROI and proven frameworks for ${targetIndustry}`
+        let leads = [];
+        let leadSource = 'Unknown';
+
+        // Use different lead finder based on business
+        if (business === 'maggie-forbes') {
+          // PREMIUM EXECUTIVE LEAD FINDER for Maggie Forbes
+          console.log('   🎯 Using Executive Lead Finder for high-end consulting clients...');
+
+          const executives = await executiveLeadFinder.findExecutives({
+            targetIndustries: ['technology', 'healthcare', 'finance', 'saas', 'manufacturing'],
+            targetTitles: ['CEO', 'VP', 'Chief', 'Director', 'President', 'Founder'],
+            companySizeMin: 50,
+            companySizeMax: 500,
+            count: count
           });
+
+          leads = executives;
+          leadSource = 'Executive Lead Finder (Funding News, Hiring Data, Expansion Announcements)';
+
+        } else {
+          // STANDARD LEAD SCRAPER for other businesses (GMP, etc)
+          console.log('   🔍 Using standard lead scraper...');
+
+          const scrapedLeads = await leadScraper.findLeads({
+            targetIndustry: targetIndustry || 'technology',
+            location: criteria?.location,
+            criteria: {
+              ...criteria,
+              count: count
+            }
+          });
+
+          leads = scrapedLeads;
+          leadSource = 'Lead Scraper (Reddit, Indie Forums, Directories)';
         }
 
-        // Generate CSV
-        const csvHeaders = ['Name', 'Company', 'Source', 'URL', 'Description', 'Pain Points', 'Fit Score', 'Outreach Tip'];
-        const csvRows = leads.map(lead => [
-          lead.name,
-          lead.company,
-          lead.source,
-          lead.url,
-          lead.description,
-          Array.isArray(lead.painPoints) ? lead.painPoints.join('; ') : lead.painPoints,
-          lead.fitScore,
-          lead.outreachTip
-        ]);
-        const csv = [
-          csvHeaders.join(','),
-          ...csvRows.map(row => row.map(cell => `"${cell}"`).join(','))
-        ].join('\n');
+        // Generate CSV export
+        const csv = business === 'maggie-forbes'
+          ? executiveLeadFinder.exportToCSV(leads)
+          : leadScraper.exportToCSV(leads);
+
+        // Generate detailed report
+        const report = business === 'maggie-forbes'
+          ? executiveLeadFinder.generateReport(leads)
+          : null;
 
         return {
           success: true,
           leadsFound: leads.length,
           leads: leads,
           csv: csv,
+          report: report,
           summary: {
             totalFound: leads.length,
-            avgFitScore: leads.reduce((sum, l) => sum + l.fitScore, 0) / leads.length,
-            sources: ['Reddit r/Entrepreneur', 'Indie Hackers']
+            avgFitScore: leads.reduce((sum, l) => sum + (l.finalScore || l.fitScore || 0), 0) / leads.length,
+            sources: [leadSource],
+            business: business
           }
         };
       } catch (error) {
@@ -68,7 +85,7 @@ class QueueWorker {
     };
 
     // Add more processors as needed
-    this.processors.contentCreation = async (jobData) => {
+    this.processors['content-creation'] = async (jobData) => {
       console.log('📝 Processing content creation job...');
       // Implement content creation
       return { success: true, message: 'Content created' };
@@ -114,7 +131,7 @@ class QueueWorker {
 
     // Process queues every 5 seconds
     this.interval = setInterval(async () => {
-      const queues = ['leadGeneration', 'contentCreation', 'marketResearch', 'landingPage', 'emailMarketing'];
+      const queues = ['lead-generation', 'content-creation', 'market-research', 'landing-page', 'email-marketing'];
 
       for (const queueName of queues) {
         await this.processQueue(queueName);

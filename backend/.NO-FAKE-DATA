@@ -1,0 +1,23 @@
+⚠️  CRITICAL RULE ⚠️
+
+NEVER USE FAKE DATA
+
+✅ DO:
+- Real web scraping (YC, Indie Hackers, Product Hunt)
+- Real APIs (when available)
+- Known real companies as fallback
+
+❌ DON'T:
+- Ask AI to "find" or "generate" companies
+- Use mock data ("John Doe", "Example.com")
+- Ship placeholder data
+
+🧪 BEFORE DEPLOY:
+node test/validate-real-data-only.js
+
+📖 READ:
+NEVER-USE-FAKE-DATA.md
+
+Date: 2025-12-04
+Reason: AI was generating fake companies
+Result: Complete rewrite, all safeguards in place
