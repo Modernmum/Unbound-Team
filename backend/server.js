@@ -45,6 +45,7 @@ try {
   console.log('✅ Queue Worker loaded');
 } catch (err) {
   console.warn('⚠️  Queue Worker failed to load:', err.message);
+  console.warn('   Stack:', err.stack?.split('\n').slice(0, 3).join('\n   '));
 }
 
 try {
@@ -61,6 +62,7 @@ try {
   console.log('✅ Automation Scheduler loaded');
 } catch (err) {
   console.warn('⚠️  Automation Scheduler failed to load:', err.message);
+  console.warn('   Stack:', err.stack?.split('\n').slice(0, 3).join('\n   '));
 }
 
 try {
