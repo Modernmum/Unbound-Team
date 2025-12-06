@@ -843,8 +843,18 @@ app.get('/api/partner/:tenantSlug/social-proof', async (req, res) => {
 // Get automation status
 app.get('/api/automation/status', (req, res) => {
   try {
-    const status = automationScheduler.getStatus();
+    const status = automationScheduler ? automationScheduler.getStatus() : { error: 'Automation scheduler not loaded' };
     res.json(status);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Manual lead generation trigger
+app.post('/api/automation/generate-leads', async (req, res) => {
+  try {
+    const triggerLeadGen = require('./api/trigger-lead-generation');
+    await triggerLeadGen(req, res);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
