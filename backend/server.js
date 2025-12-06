@@ -856,7 +856,8 @@ app.post('/api/automation/generate-leads', async (req, res) => {
     const triggerLeadGen = require('./api/trigger-lead-generation');
     await triggerLeadGen(req, res);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Lead generation error:', error);
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 
