@@ -70,9 +70,11 @@ module.exports = async (req, res) => {
 
   } catch (error) {
     console.error('❌ Lead generation error:', error);
+    console.error('   Stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      stack: error.stack
     });
   }
 };
