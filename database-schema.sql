@@ -1,6 +1,24 @@
 -- Unbound.Team Database Schema
 -- Tables for autonomous bot system
 
+-- Scored Opportunities: Discovered business opportunities from RSS/Forums
+CREATE TABLE IF NOT EXISTS scored_opportunities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  company_name TEXT NOT NULL,
+  company_domain TEXT,
+  overall_score INTEGER,
+  signal_strength_score INTEGER,
+  tech_stack_score INTEGER,
+  revenue_score INTEGER,
+  employee_score INTEGER,
+  route_to_outreach BOOLEAN DEFAULT FALSE,
+  priority_tier TEXT,
+  source TEXT,
+  opportunity_data JSONB,
+  scored_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Market Gaps: Stores identified opportunities and research
 CREATE TABLE IF NOT EXISTS market_gaps (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -77,6 +95,10 @@ INSERT INTO system_settings (setting_key, setting_value) VALUES
 ON CONFLICT (setting_key) DO NOTHING;
 
 -- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_scored_opportunities_score ON scored_opportunities(overall_score DESC);
+CREATE INDEX IF NOT EXISTS idx_scored_opportunities_tier ON scored_opportunities(priority_tier);
+CREATE INDEX IF NOT EXISTS idx_scored_opportunities_outreach ON scored_opportunities(route_to_outreach);
+CREATE INDEX IF NOT EXISTS idx_scored_opportunities_created ON scored_opportunities(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_market_gaps_opportunity ON market_gaps(opportunity_id);
 CREATE INDEX IF NOT EXISTS idx_market_gaps_approved ON market_gaps(approved_for_outreach);
 CREATE INDEX IF NOT EXISTS idx_outreach_status ON outreach_campaigns(status);

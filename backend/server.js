@@ -102,9 +102,9 @@ app.post('/api/agents/:agentName/start', async (req, res) => {
   const { agentName } = req.params;
 
   const agentMap = {
-    'gap-finder': 'backend/agents/gap-finder-agent.js',
-    'auto-outreach': 'backend/agents/auto-outreach-agent.js',
-    'auto-delivery': 'backend/agents/auto-delivery-agent.js'
+    'gap-finder': './agents/gap-finder-agent.js',
+    'auto-outreach': './agents/auto-outreach-agent.js',
+    'auto-delivery': './agents/auto-delivery-agent.js'
   };
 
   if (!agentMap[agentName]) {
