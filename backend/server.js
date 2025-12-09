@@ -215,6 +215,7 @@ app.get('/api/agents/:agentName/status', (req, res) => {
 // scores it, and runs it through the full pipeline
 const AIResearcher = require('./services/ai-researcher');
 const IntelligentScorer = require('./services/intelligent-scorer');
+const EmailFinder = require('./services/email-finder');
 
 app.post('/api/discover-company', async (req, res) => {
   const { company_name, company_domain, contact_email } = req.body;
@@ -291,22 +292,43 @@ app.post('/api/discover-company', async (req, res) => {
     };
     console.log(`   ✅ Email generated`);
 
-    // Stage 4: Extract email from research
-    console.log(`📧 Stage 4: Extracting contact email...`);
+    // Stage 4: Find contact email using EmailFinder (scrapes website directly)
+    console.log(`📧 Stage 4: Finding contact email...`);
     let discoveredEmail = contact_email || null;
+    let emailSource = contact_email ? 'provided' : null;
+    let emailConfidence = contact_email ? 'high' : 'none';
 
-    // Try to extract email from Perplexity's contact discovery response
+    // First try: Direct website scraping with EmailFinder
+    if (!discoveredEmail && opportunity.company_domain) {
+      const emailFinder = new EmailFinder();
+      const emailResults = await emailFinder.findEmails(company_name, opportunity.company_domain);
+
+      if (emailResults.primaryEmail) {
+        discoveredEmail = emailResults.primaryEmail;
+        emailSource = 'website_scrape';
+        emailConfidence = emailResults.confidence;
+        console.log(`   ✅ Found email via scraping: ${discoveredEmail} (${emailConfidence})`);
+      }
+
+      results.stages.emailFinderResults = {
+        emails_found: emailResults.emails,
+        sources: emailResults.sources,
+        patterns_tried: emailResults.sources?.patterns || []
+      };
+    }
+
+    // Second try: Perplexity research (fallback)
     if (!discoveredEmail && research.contactDiscovery?.findings) {
-      const emailMatch = research.contactDiscovery.findings.match(/PRIMARY EMAIL:\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+      const emailMatch = research.contactDiscovery.findings.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
       if (emailMatch) {
-        discoveredEmail = emailMatch[1];
-        console.log(`   ✅ Found email: ${discoveredEmail}`);
-      } else {
-        // Fallback: look for any email in the response
-        const anyEmailMatch = research.contactDiscovery.findings.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-        if (anyEmailMatch) {
-          discoveredEmail = anyEmailMatch[1];
-          console.log(`   ✅ Found email (fallback): ${discoveredEmail}`);
+        // Validate it's from the right domain
+        const foundEmail = emailMatch[1].toLowerCase();
+        const domain = opportunity.company_domain?.toLowerCase();
+        if (!domain || foundEmail.includes(domain) || !foundEmail.includes('yahoo') && !foundEmail.includes('gmail')) {
+          discoveredEmail = foundEmail;
+          emailSource = 'perplexity';
+          emailConfidence = 'low';
+          console.log(`   ✅ Found email via Perplexity: ${discoveredEmail} (${emailConfidence})`);
         }
       }
     }
@@ -315,7 +337,9 @@ app.post('/api/discover-company', async (req, res) => {
       completed: true,
       email_found: !!discoveredEmail,
       email: discoveredEmail,
-      raw_response: research.contactDiscovery?.findings?.substring(0, 500) || 'No email research data'
+      source: emailSource,
+      confidence: emailConfidence,
+      perplexity_response: research.contactDiscovery?.findings?.substring(0, 300) || null
     };
 
     // Stage 5: Save to database
