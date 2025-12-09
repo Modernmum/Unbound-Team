@@ -1,0 +1,15 @@
+{
+  "name": "unbound-team",
+  "version": "1.0.0",
+  "description": "Unbound.Team autonomous system",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "cd backend && npm install && node server.js",
+    "install-backend": "cd backend && npm install"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "Unbound.Team",
+  "license": "MIT"
+}
