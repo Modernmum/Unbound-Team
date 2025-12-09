@@ -32,16 +32,19 @@ class AIResearcher {
     // 3. Decision Maker Research
     research.decisionMaker = await this.findDecisionMaker(opportunity);
 
-    // 4. Recent Activity & News
+    // 4. CONTACT EMAIL DISCOVERY - Critical for outreach
+    research.contactDiscovery = await this.findContactEmail(opportunity);
+
+    // 5. Recent Activity & News
     research.recentActivity = await this.findRecentActivity(opportunity);
 
-    // 5. Competitor & Market Context
+    // 6. Competitor & Market Context
     research.marketContext = await this.researchMarketContext(opportunity);
 
-    // 6. Personalization Hooks
+    // 7. Personalization Hooks
     research.personalizationHooks = await this.extractPersonalizationHooks(research);
 
-    // 7. Custom Approach
+    // 8. Custom Approach
     research.recommendedApproach = await this.generateApproach(research);
 
     console.log(`✅ Research complete for ${opportunity.company_name}`);
@@ -103,6 +106,41 @@ Find:
 5. Their priorities and what they care about
 
 Search for real people and profiles.`;
+
+    return await this.askPerplexity(query);
+  }
+
+  /**
+   * CRITICAL: Find contact email for outreach
+   */
+  async findContactEmail(opportunity) {
+    const query = `Find the contact email address for ${opportunity.company_name}.
+
+${opportunity.company_domain ? `Website: ${opportunity.company_domain}` : ''}
+
+I need to find a REAL, WORKING email address to contact this business. Search for:
+
+1. The founder/owner's direct email address
+2. Contact email on their website (look for contact page, about page, footer)
+3. Email addresses mentioned on LinkedIn profiles
+4. Email addresses from press releases or interviews
+5. General business email (hello@, contact@, info@)
+6. Any email format patterns for this domain (e.g., firstname@domain.com)
+
+IMPORTANT:
+- Return ACTUAL email addresses you find, not guesses
+- Prioritize founder/decision-maker emails over generic ones
+- If you find multiple emails, list them all
+- Include where you found each email (source)
+
+Format your response as:
+PRIMARY EMAIL: [email address]
+SOURCE: [where you found it]
+CONFIDENCE: [high/medium/low]
+
+ADDITIONAL EMAILS FOUND:
+- [email]: [source]
+- [email]: [source]`;
 
     return await this.askPerplexity(query);
   }

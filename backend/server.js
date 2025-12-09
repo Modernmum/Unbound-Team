@@ -291,14 +291,40 @@ app.post('/api/discover-company', async (req, res) => {
     };
     console.log(`   ✅ Email generated`);
 
-    // Stage 4: Save to database
-    console.log(`💾 Stage 4: Saving to database...`);
+    // Stage 4: Extract email from research
+    console.log(`📧 Stage 4: Extracting contact email...`);
+    let discoveredEmail = contact_email || null;
+
+    // Try to extract email from Perplexity's contact discovery response
+    if (!discoveredEmail && research.contactDiscovery?.findings) {
+      const emailMatch = research.contactDiscovery.findings.match(/PRIMARY EMAIL:\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+      if (emailMatch) {
+        discoveredEmail = emailMatch[1];
+        console.log(`   ✅ Found email: ${discoveredEmail}`);
+      } else {
+        // Fallback: look for any email in the response
+        const anyEmailMatch = research.contactDiscovery.findings.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+        if (anyEmailMatch) {
+          discoveredEmail = anyEmailMatch[1];
+          console.log(`   ✅ Found email (fallback): ${discoveredEmail}`);
+        }
+      }
+    }
+
+    results.stages.emailDiscovery = {
+      completed: true,
+      email_found: !!discoveredEmail,
+      email: discoveredEmail,
+      raw_response: research.contactDiscovery?.findings?.substring(0, 500) || 'No email research data'
+    };
+
+    // Stage 5: Save to database
+    console.log(`💾 Stage 5: Saving to database...`);
     const { data: savedOpp, error: saveError } = await supabase
       .from('scored_opportunities')
       .insert({
         company_name: opportunity.company_name,
         company_domain: opportunity.company_domain,
-        contact_email: contact_email || null,
         overall_score: (scoring.score || 0) * 2.5, // Convert to 0-100 scale
         signal_strength_score: 80,
         route_to_outreach: scoring.qualified && scoring.score >= 25,
@@ -308,6 +334,8 @@ app.post('/api/discover-company', async (req, res) => {
           research: results.stages.research,
           scoring: results.stages.scoring,
           email_draft: results.stages.email,
+          discovered_email: discoveredEmail,
+          email_discovery_raw: results.stages.emailDiscovery,
           discovered_at: new Date().toISOString()
         }
       })
@@ -327,10 +355,13 @@ app.post('/api/discover-company', async (req, res) => {
       is_good_fit: scoring.qualified && scoring.score >= 25,
       fit_level: scoring.score >= 30 ? 'EXCELLENT' : scoring.score >= 25 ? 'GOOD' : scoring.score >= 20 ? 'MAYBE' : 'NOT_A_FIT',
       recommended_action: scoring.action,
+      contact_email: discoveredEmail,
+      email_found: !!discoveredEmail,
+      ready_for_outreach: scoring.qualified && scoring.score >= 25 && !!discoveredEmail,
       next_steps: scoring.qualified
-        ? contact_email
-          ? 'Ready for outreach - email can be sent'
-          : 'Need contact email to proceed with outreach'
+        ? discoveredEmail
+          ? `Ready for outreach - email found: ${discoveredEmail}`
+          : 'QUALIFIED but need contact email - try manual lookup'
         : 'Does not meet qualification criteria'
     };
 
