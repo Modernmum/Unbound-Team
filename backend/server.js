@@ -208,6 +208,204 @@ app.get('/api/agents/:agentName/status', (req, res) => {
   });
 });
 
+// ============================================
+// DISCOVER COMPANY - Full Pipeline Test
+// ============================================
+// Takes a company name, researches it via Perplexity,
+// scores it, and runs it through the full pipeline
+const AIResearcher = require('./services/ai-researcher');
+const IntelligentScorer = require('./services/intelligent-scorer');
+
+app.post('/api/discover-company', async (req, res) => {
+  const { company_name, company_domain, contact_email } = req.body;
+
+  if (!company_name) {
+    return res.status(400).json({
+      success: false,
+      error: 'company_name is required'
+    });
+  }
+
+  console.log(`\n🔍 DISCOVERING: ${company_name}`);
+  console.log(`================================\n`);
+
+  try {
+    const researcher = new AIResearcher();
+    const scorer = new IntelligentScorer();
+    const results = { company_name, stages: {} };
+
+    // Stage 1: Research the company with Perplexity
+    console.log(`📡 Stage 1: Researching ${company_name} with Perplexity...`);
+    const opportunity = {
+      id: `discover-${Date.now()}`,
+      company_name,
+      company_domain: company_domain || `${company_name.toLowerCase().replace(/\s+/g, '')}.com`,
+      contact_email: contact_email || null,
+      route_to_outreach: true
+    };
+
+    const research = await researcher.researchLead(opportunity);
+    results.stages.research = {
+      completed: true,
+      companyBackground: research.companyBackground?.findings?.substring(0, 500) || 'No data',
+      painPoints: research.painPointAnalysis?.findings?.substring(0, 500) || 'No data',
+      decisionMaker: research.decisionMaker?.findings?.substring(0, 300) || 'No data',
+      recentActivity: research.recentActivity?.findings?.substring(0, 300) || 'No data',
+      personalizationHooks: research.personalizationHooks?.findings?.substring(0, 300) || 'No data',
+      recommendedApproach: research.recommendedApproach?.findings?.substring(0, 500) || 'No data'
+    };
+    console.log(`   ✅ Research complete`);
+
+    // Stage 2: Score the opportunity
+    console.log(`📊 Stage 2: Scoring ${company_name}...`);
+
+    // Enrich opportunity with research data for better scoring
+    opportunity.opportunity_data = {
+      source: 'discover-company',
+      research_summary: research.companyBackground?.findings || '',
+      pain_points: research.painPointAnalysis?.findings || '',
+      context: research.recommendedApproach?.findings || ''
+    };
+
+    const scoring = await scorer.processOpportunity(opportunity);
+    results.stages.scoring = {
+      completed: true,
+      qualified: scoring.qualified,
+      score: scoring.score || 0,
+      action: scoring.action,
+      reasoning: scoring.reasoning,
+      breakdown: scoring.breakdown,
+      keyInsights: scoring.keyInsights,
+      suggestedApproach: scoring.suggestedApproach
+    };
+    console.log(`   ✅ Score: ${scoring.score}/40 - ${scoring.action}`);
+
+    // Stage 3: Generate personalized email
+    console.log(`📧 Stage 3: Generating personalized outreach...`);
+    const email = generateDiscoveryEmail(opportunity, research, scoring);
+    results.stages.email = {
+      completed: true,
+      subject: email.subject,
+      body: email.body,
+      ready_to_send: !!contact_email
+    };
+    console.log(`   ✅ Email generated`);
+
+    // Stage 4: Save to database
+    console.log(`💾 Stage 4: Saving to database...`);
+    const { data: savedOpp, error: saveError } = await supabase
+      .from('scored_opportunities')
+      .insert({
+        company_name: opportunity.company_name,
+        company_domain: opportunity.company_domain,
+        contact_email: contact_email || null,
+        overall_score: (scoring.score || 0) * 2.5, // Convert to 0-100 scale
+        signal_strength_score: 80,
+        route_to_outreach: scoring.qualified && scoring.score >= 25,
+        priority_tier: scoring.score >= 30 ? 'tier_1' : scoring.score >= 20 ? 'tier_2' : 'tier_3',
+        source: 'discover-company',
+        opportunity_data: {
+          research: results.stages.research,
+          scoring: results.stages.scoring,
+          email_draft: results.stages.email,
+          discovered_at: new Date().toISOString()
+        }
+      })
+      .select()
+      .single();
+
+    if (saveError) {
+      console.error('   ❌ Save error:', saveError.message);
+      results.stages.database = { completed: false, error: saveError.message };
+    } else {
+      results.stages.database = { completed: true, opportunity_id: savedOpp.id };
+      console.log(`   ✅ Saved with ID: ${savedOpp.id}`);
+    }
+
+    // Final assessment
+    results.assessment = {
+      is_good_fit: scoring.qualified && scoring.score >= 25,
+      fit_level: scoring.score >= 30 ? 'EXCELLENT' : scoring.score >= 25 ? 'GOOD' : scoring.score >= 20 ? 'MAYBE' : 'NOT_A_FIT',
+      recommended_action: scoring.action,
+      next_steps: scoring.qualified
+        ? contact_email
+          ? 'Ready for outreach - email can be sent'
+          : 'Need contact email to proceed with outreach'
+        : 'Does not meet qualification criteria'
+    };
+
+    console.log(`\n✅ DISCOVERY COMPLETE: ${company_name}`);
+    console.log(`   Fit: ${results.assessment.fit_level}`);
+    console.log(`   Score: ${scoring.score}/40`);
+    console.log(`   Action: ${scoring.action}\n`);
+
+    res.json({
+      success: true,
+      ...results
+    });
+
+  } catch (error) {
+    console.error(`❌ Discovery error for ${company_name}:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      company_name
+    });
+  }
+});
+
+// Helper function for discovery emails
+function generateDiscoveryEmail(opportunity, research, scoring) {
+  const company = opportunity.company_name;
+
+  let companyInfo = '';
+  if (research.companyBackground?.findings) {
+    companyInfo = research.companyBackground.findings.split('\n').slice(0, 2).join(' ').substring(0, 200);
+  }
+
+  let painPoint = '';
+  if (research.painPointAnalysis?.findings) {
+    painPoint = research.painPointAnalysis.findings.split('\n').slice(0, 2).join(' ').substring(0, 150);
+  }
+
+  let hook = '';
+  if (research.personalizationHooks?.findings) {
+    hook = research.personalizationHooks.findings.split('\n').slice(0, 1).join(' ').substring(0, 100);
+  }
+
+  const subject = `Automating client acquisition for ${company}`;
+
+  let body = `Hi there,\n\n`;
+
+  if (companyInfo) {
+    body += `I came across ${company} and was impressed by what you're building. ${companyInfo}...\n\n`;
+  } else {
+    body += `I came across ${company} and wanted to reach out.\n\n`;
+  }
+
+  if (painPoint) {
+    body += `I understand you may be facing challenges with ${painPoint}... That's exactly what we help businesses solve.\n\n`;
+  }
+
+  body += `Unbound builds autonomous client acquisition systems that:\n`;
+  body += `• Automatically discover qualified opportunities in your market\n`;
+  body += `• Research each lead in depth using real-time market intelligence\n`;
+  body += `• Send personalized outreach based on their specific pain points\n`;
+  body += `• Handle initial conversations and book qualified calls\n\n`;
+
+  if (hook) {
+    body += `${hook}...\n\n`;
+  }
+
+  body += `Would you be open to a brief 15-minute conversation to explore if there's a fit?\n\n`;
+  body += `Best regards,\n`;
+  body += `Maggie Forbes\n`;
+  body += `Unbound.Team\n\n`;
+  body += `P.S. This entire outreach was generated using the same autonomous system I'd build for you.`;
+
+  return { subject, body };
+}
+
 // Get Emails
 app.get('/api/emails', async (req, res) => {
   try {
