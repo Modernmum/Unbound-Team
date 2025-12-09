@@ -211,7 +211,7 @@ app.get('/api/agents/:agentName/status', (req, res) => {
 app.get('/api/emails', async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from('outreach_emails')
+      .from('outreach_campaigns')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(100);
@@ -235,7 +235,7 @@ app.get('/api/emails', async (req, res) => {
 app.get('/api/emails/stats', async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from('outreach_emails')
+      .from('outreach_campaigns')
       .select('*');
 
     if (error) throw error;
