@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const Parser = require('rss-parser');
 
 class ForumScanner {
   constructor() {
@@ -6,12 +7,14 @@ class ForumScanner {
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_KEY
     );
+    this.parser = new Parser();
 
+    // Using Reddit RSS feeds (publicly available)
     this.forums = [
-      { name: 'Indie Hackers', url: 'https://www.indiehackers.com' },
-      { name: 'Reddit r/startups', url: 'https://reddit.com/r/startups' },
-      { name: 'Reddit r/SaaS', url: 'https://reddit.com/r/SaaS' },
-      { name: 'Hacker News', url: 'https://news.ycombinator.com' }
+      { name: 'r/startups', url: 'https://www.reddit.com/r/startups/.rss' },
+      { name: 'r/Entrepreneur', url: 'https://www.reddit.com/r/Entrepreneur/.rss' },
+      { name: 'r/SaaS', url: 'https://www.reddit.com/r/SaaS/.rss' },
+      { name: 'r/smallbusiness', url: 'https://www.reddit.com/r/smallbusiness/.rss' }
     ];
   }
 
@@ -20,63 +23,37 @@ class ForumScanner {
     const opportunities = [];
 
     try {
-      // Mock forum opportunities
-      const mockOpportunities = [
-        {
-          title: 'Struggling with lead generation',
-          forum: 'Indie Hackers',
-          url: 'https://www.indiehackers.com/post/example-1',
-          author: 'startup_founder_123',
-          pain_point: 'Not getting enough qualified leads',
-          business_area: 'sales',
-          urgency: 'urgent',
-          fit_score: 9,
-          engagement: 15
-        },
-        {
-          title: 'Looking for analytics solution',
-          forum: 'Reddit r/SaaS',
-          url: 'https://reddit.com/r/saas/example',
-          author: 'saas_builder',
-          pain_point: 'Need better customer analytics',
-          business_area: 'product',
-          urgency: 'medium',
-          fit_score: 7,
-          engagement: 8
-        },
-        {
-          title: 'How to automate content creation?',
-          forum: 'Hacker News',
-          url: 'https://news.ycombinator.com/item?id=example',
-          author: 'content_creator',
-          pain_point: 'Content creation taking too much time',
-          business_area: 'marketing',
-          urgency: 'high',
-          fit_score: 8,
-          engagement: 23
-        }
-      ];
+      for (const forum of this.forums) {
+        try {
+          console.log(`📡 Scanning ${forum.name}...`);
+          const feed = await this.parser.parseURL(forum.url);
 
-      // Save to database
-      for (const opp of mockOpportunities) {
-        const { data, error } = await this.supabase
-          .from('forum_opportunities')
-          .insert({
-            title: opp.title,
-            forum: opp.forum,
-            url: opp.url,
-            author: opp.author,
-            pain_point: opp.pain_point,
-            business_area: opp.business_area,
-            urgency: opp.urgency,
-            fit_score: opp.fit_score,
-            engagement_score: opp.engagement,
-            scanned_at: new Date().toISOString()
-          })
-          .select();
+          // Analyze recent posts (last 15)
+          const recentPosts = feed.items.slice(0, 15);
 
-        if (!error && data) {
-          opportunities.push(data[0]);
+          for (const post of recentPosts) {
+            const opportunity = this.analyzePost(post, forum.name);
+            if (opportunity) {
+              // Save to database
+              const { data, error} = await this.supabase
+                .from('scored_opportunities')
+                .insert({
+                  company_name: opportunity.author,
+                  company_domain: 'reddit.com',
+                  overall_score: opportunity.fit_score * 10,
+                  signal_strength_score: opportunity.engagement * 10,
+                  route_to_outreach: opportunity.fit_score >= 7,
+                  priority_tier: opportunity.urgency === 'urgent' ? 'tier_1' : 'tier_2'
+                })
+                .select();
+
+              if (!error && data) {
+                opportunities.push(data[0]);
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error scanning ${forum.name}:`, error.message);
         }
       }
 
@@ -88,12 +65,101 @@ class ForumScanner {
     }
   }
 
+  analyzePost(post, forumName) {
+    const title = (post.title || '').toLowerCase();
+    const content = (post.contentSnippet || post.content || '').toLowerCase();
+    const text = title + ' ' + content;
+
+    // Pain point indicators
+    const painKeywords = [
+      'struggling', 'problem', 'issue', 'challenge', 'difficult',
+      'need help', 'looking for', 'how do i', 'cant figure',
+      'frustrated', 'failing', 'stuck', 'advice needed'
+    ];
+
+    // Question indicators (people asking questions are seeking solutions)
+    const questionKeywords = [
+      'how to', 'how can', 'what is the best', 'any recommendations',
+      'does anyone know', 'looking for', 'need', 'want'
+    ];
+
+    // Business context
+    const businessKeywords = [
+      'startup', 'business', 'saas', 'company', 'revenue',
+      'customer', 'user', 'client', 'sales', 'marketing',
+      'product', 'service', 'growth', 'scale'
+    ];
+
+    let painScore = 0;
+    let questionScore = 0;
+    let businessScore = 0;
+
+    painKeywords.forEach(keyword => {
+      if (text.includes(keyword)) painScore++;
+    });
+
+    questionKeywords.forEach(keyword => {
+      if (text.includes(keyword)) questionScore++;
+    });
+
+    businessKeywords.forEach(keyword => {
+      if (text.includes(keyword)) businessScore++;
+    });
+
+    // Calculate total engagement
+    const engagement = Math.min(10, (painScore + questionScore));
+
+    // Only return if there's business context AND (pain OR questions)
+    if (businessScore > 0 && (painScore > 0 || questionScore > 0)) {
+      const fitScore = Math.min(10, painScore + questionScore + businessScore);
+
+      return {
+        title: post.title,
+        forum: forumName,
+        url: post.link,
+        author: this.extractAuthor(post),
+        pain_point: this.extractPainPoint(text),
+        business_area: this.detectBusinessArea(text),
+        urgency: painScore >= 2 ? 'urgent' : (questionScore >= 1 ? 'high' : 'medium'),
+        fit_score: fitScore,
+        engagement: engagement
+      };
+    }
+
+    return null;
+  }
+
+  extractAuthor(post) {
+    if (post.author) return post.author;
+    if (post.creator) return post.creator;
+    return 'reddit_user';
+  }
+
+  extractPainPoint(text) {
+    if (text.includes('struggling') || text.includes('stuck')) return 'Facing operational challenges';
+    if (text.includes('need help') || text.includes('advice needed')) return 'Seeking expert guidance';
+    if (text.includes('looking for') || text.includes('recommendations')) return 'Actively searching for solutions';
+    if (text.includes('how to') || text.includes('how can')) return 'Knowledge gap - needs implementation help';
+    if (text.includes('failing') || text.includes('not working')) return 'Current solution failing';
+    return 'Business challenge or question';
+  }
+
+  detectBusinessArea(text) {
+    if (text.includes('marketing') || text.includes('customer acquisition') || text.includes('advertising')) return 'marketing';
+    if (text.includes('sales') || text.includes('revenue') || text.includes('conversion')) return 'sales';
+    if (text.includes('product') || text.includes('development') || text.includes('feature')) return 'product';
+    if (text.includes('operations') || text.includes('workflow') || text.includes('automation')) return 'operations';
+    if (text.includes('growth') || text.includes('scale') || text.includes('expand')) return 'growth';
+    if (text.includes('funding') || text.includes('investor') || text.includes('capital')) return 'funding';
+    return 'general';
+  }
+
   async getRecentOpportunities(limit = 50) {
     try {
       const { data, error } = await this.supabase
-        .from('forum_opportunities')
+        .from('scored_opportunities')
         .select('*')
-        .order('scanned_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(limit);
 
       if (error) throw error;
@@ -107,11 +173,11 @@ class ForumScanner {
   async getHighPriorityOpportunities() {
     try {
       const { data, error } = await this.supabase
-        .from('forum_opportunities')
+        .from('scored_opportunities')
         .select('*')
-        .gte('fit_score', 8)
-        .eq('urgency', 'urgent')
-        .order('engagement_score', { ascending: false })
+        .gte('overall_score', 70)
+        .in('priority_tier', ['tier_1', 'tier_2'])
+        .order('overall_score', { ascending: false })
         .limit(20);
 
       if (error) throw error;

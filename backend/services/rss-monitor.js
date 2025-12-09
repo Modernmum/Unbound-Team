@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const Parser = require('rss-parser');
 
 class RSSMonitor {
   constructor() {
@@ -6,14 +7,13 @@ class RSSMonitor {
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_KEY
     );
+    this.parser = new Parser();
 
     this.feeds = [
       'https://www.indiehackers.com/feed',
       'https://news.ycombinator.com/rss',
       'https://www.entrepreneur.com/latest.rss',
-      'https://techcrunch.com/feed/',
-      'https://www.reddit.com/r/startups/.rss',
-      'https://www.reddit.com/r/Entrepreneur/.rss'
+      'https://techcrunch.com/feed/'
     ];
   }
 
@@ -22,47 +22,37 @@ class RSSMonitor {
     const opportunities = [];
 
     try {
-      // For now, return mock data since we need an RSS parser library
-      // In production, you'd use a library like 'rss-parser'
-      const mockOpportunities = [
-        {
-          title: 'Looking for marketing automation tool',
-          source: 'Indie Hackers',
-          url: 'https://www.indiehackers.com/post/example',
-          pain_point: 'Spending too much time on manual email campaigns',
-          business_area: 'marketing',
-          urgency: 'high',
-          fit_score: 8
-        },
-        {
-          title: 'Need help with customer onboarding',
-          source: 'Reddit r/startups',
-          url: 'https://reddit.com/r/startups/example',
-          pain_point: 'Customer churn during onboarding',
-          business_area: 'product',
-          urgency: 'medium',
-          fit_score: 7
-        }
-      ];
+      for (const feedUrl of this.feeds) {
+        try {
+          console.log(`📡 Fetching ${feedUrl}...`);
+          const feed = await this.parser.parseURL(feedUrl);
 
-      // Save to database
-      for (const opp of mockOpportunities) {
-        const { data, error } = await this.supabase
-          .from('rss_opportunities')
-          .insert({
-            title: opp.title,
-            source: opp.source,
-            url: opp.url,
-            pain_point: opp.pain_point,
-            business_area: opp.business_area,
-            urgency: opp.urgency,
-            fit_score: opp.fit_score,
-            scanned_at: new Date().toISOString()
-          })
-          .select();
+          // Analyze recent items (last 10)
+          const recentItems = feed.items.slice(0, 10);
 
-        if (!error && data) {
-          opportunities.push(data[0]);
+          for (const item of recentItems) {
+            const opportunity = this.analyzeItem(item, feed.title);
+            if (opportunity) {
+              // Save to database
+              const { data, error } = await this.supabase
+                .from('scored_opportunities')
+                .insert({
+                  company_name: opportunity.source,
+                  company_domain: this.extractDomain(item.link),
+                  overall_score: opportunity.fit_score * 10,
+                  signal_strength_score: 80,
+                  route_to_outreach: opportunity.fit_score >= 7,
+                  priority_tier: opportunity.fit_score >= 8 ? 'tier_1' : 'tier_2'
+                })
+                .select();
+
+              if (!error && data) {
+                opportunities.push(data[0]);
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error parsing feed ${feedUrl}:`, error.message);
         }
       }
 
@@ -74,12 +64,84 @@ class RSSMonitor {
     }
   }
 
+  analyzeItem(item, sourceName) {
+    const title = (item.title || '').toLowerCase();
+    const content = (item.contentSnippet || item.content || '').toLowerCase();
+    const text = title + ' ' + content;
+
+    // Look for pain points and business needs
+    const painKeywords = [
+      'struggling', 'difficult', 'problem', 'issue', 'challenge',
+      'need help', 'looking for', 'how to', 'cant figure',
+      'frustrat', 'painful', 'slow', 'broken', 'fail'
+    ];
+
+    const businessKeywords = [
+      'startup', 'business', 'saas', 'company', 'revenue',
+      'customer', 'marketing', 'sales', 'growth', 'scale'
+    ];
+
+    let painScore = 0;
+    let businessScore = 0;
+
+    painKeywords.forEach(keyword => {
+      if (text.includes(keyword)) painScore++;
+    });
+
+    businessKeywords.forEach(keyword => {
+      if (text.includes(keyword)) businessScore++;
+    });
+
+    // Only return if there's both pain and business context
+    if (painScore > 0 && businessScore > 0) {
+      const fitScore = Math.min(10, painScore + businessScore);
+
+      return {
+        title: item.title,
+        source: sourceName,
+        url: item.link,
+        pain_point: this.extractPainPoint(text),
+        business_area: this.detectBusinessArea(text),
+        urgency: painScore >= 2 ? 'high' : 'medium',
+        fit_score: fitScore
+      };
+    }
+
+    return null;
+  }
+
+  extractPainPoint(text) {
+    if (text.includes('struggling')) return 'Facing operational challenges';
+    if (text.includes('need help')) return 'Seeking assistance';
+    if (text.includes('looking for')) return 'Actively searching for solutions';
+    if (text.includes('how to')) return 'Knowledge gap';
+    return 'General business challenge';
+  }
+
+  detectBusinessArea(text) {
+    if (text.includes('marketing') || text.includes('customer acquisition')) return 'marketing';
+    if (text.includes('sales') || text.includes('revenue')) return 'sales';
+    if (text.includes('product') || text.includes('development')) return 'product';
+    if (text.includes('operations') || text.includes('workflow')) return 'operations';
+    if (text.includes('growth') || text.includes('scale')) return 'growth';
+    return 'general';
+  }
+
+  extractDomain(url) {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.hostname.replace('www.', '');
+    } catch {
+      return 'unknown.com';
+    }
+  }
+
   async getRecentOpportunities(limit = 50) {
     try {
       const { data, error } = await this.supabase
-        .from('rss_opportunities')
+        .from('scored_opportunities')
         .select('*')
-        .order('scanned_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(limit);
 
       if (error) throw error;
