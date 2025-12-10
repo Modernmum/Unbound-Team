@@ -375,12 +375,14 @@ app.post('/api/research-leads', async (req, res) => {
     const researcher = new AIResearcher();
 
     // Get unresearched leads (no lead_research in opportunity_data)
+    // Order by created_at DESC to get newest leads first
     let query = supabase
       .from('scored_opportunities')
       .select('*')
       .is('outreach_sent', null)
       .eq('route_to_outreach', true)
       .gte('overall_score', 70)
+      .order('created_at', { ascending: false })
       .limit(limit);
 
     // Optionally filter by source
@@ -401,12 +403,26 @@ app.post('/api/research-leads', async (req, res) => {
     }
 
     // Filter to only leads without research
+    // Debug: log what we're seeing in the first lead's opportunity_data
+    if (leads.length > 0) {
+      const firstLead = leads[0];
+      console.log(`   📋 First lead: ${firstLead.company_name}`);
+      console.log(`   📋 opportunity_data keys: ${Object.keys(firstLead.opportunity_data || {}).join(', ')}`);
+      console.log(`   📋 Has lead_research: ${!!(firstLead.opportunity_data?.lead_research)}`);
+    }
+
     const unresearched = leads.filter(l => !l.opportunity_data?.lead_research);
     console.log(`   📋 After filtering: ${unresearched.length} unresearched out of ${leads.length}`);
 
     console.log(`📋 Found ${unresearched.length} unresearched leads out of ${leads.length}`);
 
-    const results = { researched: 0, skipped: 0, errors: [], queryReturned: leads.length, unresearchedCount: unresearched.length };
+    const firstLeadInfo = leads.length > 0 ? {
+      name: leads[0].company_name,
+      hasLeadResearch: !!(leads[0].opportunity_data?.lead_research),
+      keys: Object.keys(leads[0].opportunity_data || {})
+    } : null;
+
+    const results = { researched: 0, skipped: 0, errors: [], queryReturned: leads.length, unresearchedCount: unresearched.length, firstLead: firstLeadInfo };
 
     for (const lead of unresearched) {
       try {
