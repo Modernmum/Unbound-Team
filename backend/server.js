@@ -769,6 +769,24 @@ app.get('/api/services', (req, res) => {
   });
 });
 
+// Delete test data endpoint
+app.delete('/api/test-data/:table/:id', async (req, res) => {
+  const { table, id } = req.params;
+  const allowedTables = ['call_transcripts', 'mfs_clients'];
+
+  if (!allowedTables.includes(table)) {
+    return res.status(400).json({ success: false, error: 'Invalid table' });
+  }
+
+  const { error } = await supabase.from(table).delete().eq('id', id);
+
+  if (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+
+  res.json({ success: true, message: `Deleted ${id} from ${table}` });
+});
+
 // Error handling
 app.use((error, req, res, next) => {
   console.error('Server error:', error);
