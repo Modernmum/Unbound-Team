@@ -3,7 +3,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const IntelligentScorer = require('../services/intelligent-scorer');
 const AIResearcher = require('../services/ai-researcher');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
 class AutoOutreachAgent {
   constructor() {
@@ -18,16 +18,9 @@ class AutoOutreachAgent {
     this.scorer = new IntelligentScorer();
     this.researcher = new AIResearcher();
 
-    // Email transporter
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: process.env.SMTP_PORT || 587,
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    });
+    // Resend email client
+    this.resend = new Resend(process.env.RESEND_API_KEY);
+    this.fromEmail = process.env.RESEND_FROM_EMAIL || 'maggie@maggieforbesstrategies.com';
   }
 
   async start() {
@@ -108,14 +101,14 @@ class AutoOutreachAgent {
           const email = this.generatePersonalizedEmail(opp, research, scoring);
 
           // Step 4: Send email (if auto-send enabled and email available)
-          if (autoSendEnabled && process.env.SMTP_USER && process.env.SMTP_PASS && opp.contact_email) {
-            console.log(`   📧 Sending email...`);
+          if (autoSendEnabled && process.env.RESEND_API_KEY && opp.contact_email) {
+            console.log(`   📧 Sending email via Resend...`);
             await this.sendEmail(opp, email);
             console.log(`   ✅ Email sent to ${opp.contact_email}`);
             this.emailsSent++;
           } else {
             const reason = !opp.contact_email ? 'no email address' :
-                          !autoSendEnabled ? 'auto-send disabled' : 'SMTP not configured';
+                          !autoSendEnabled ? 'auto-send disabled' : 'Resend API key not configured';
             console.log(`   📝 Draft created (${reason})`);
           }
 
@@ -194,15 +187,19 @@ class AutoOutreachAgent {
   }
 
   async sendEmail(opportunity, email) {
-    const info = await this.transporter.sendMail({
-      from: `"Maggie Forbes - Unbound.Team" <${process.env.SMTP_USER}>`,
+    const { data, error } = await this.resend.emails.send({
+      from: `Maggie Forbes <${this.fromEmail}>`,
       to: opportunity.contact_email,
       subject: email.subject,
       text: email.body,
       html: email.body.replace(/\n/g, '<br>')
     });
 
-    return info;
+    if (error) {
+      throw new Error(`Resend error: ${error.message}`);
+    }
+
+    return data;
   }
 
   async createCampaign(opportunity, email, research, scoring, sent) {
