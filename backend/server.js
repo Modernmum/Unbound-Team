@@ -307,19 +307,24 @@ app.post('/api/import-leads', async (req, res) => {
           continue;
         }
 
-        // Check for duplicates by email
-        if (lead.contact_email) {
-          const { data: existing } = await supabase
-            .from('scored_opportunities')
-            .select('id')
-            .eq('contact_email', lead.contact_email)
-            .limit(1);
+        // Check for duplicates by company name + domain
+        const { data: existing } = await supabase
+          .from('scored_opportunities')
+          .select('id')
+          .eq('company_name', lead.company_name || 'Unknown')
+          .eq('company_domain', lead.company_domain || '')
+          .limit(1);
 
-          if (existing && existing.length > 0) {
-            results.skipped++;
-            continue;
-          }
+        if (existing && existing.length > 0) {
+          results.skipped++;
+          continue;
         }
+
+        // Merge contact_email into opportunity_data if provided
+        const opportunityData = {
+          ...(lead.opportunity_data || {}),
+          discovered_email: lead.contact_email || lead.opportunity_data?.discovered_email || null
+        };
 
         // Insert the lead
         const { error } = await supabase
@@ -327,13 +332,12 @@ app.post('/api/import-leads', async (req, res) => {
           .insert({
             company_name: lead.company_name || 'Unknown',
             company_domain: lead.company_domain || '',
-            contact_email: lead.contact_email || null,
             overall_score: lead.overall_score || 85,
             signal_strength_score: lead.signal_strength_score || 90,
             route_to_outreach: lead.route_to_outreach !== false,
             priority_tier: lead.priority_tier || 'tier_1',
             source: source,
-            opportunity_data: lead.opportunity_data || {}
+            opportunity_data: opportunityData
           });
 
         if (error) {
