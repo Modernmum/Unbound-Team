@@ -3,6 +3,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const IntelligentScorer = require('../services/intelligent-scorer');
 const AIResearcher = require('../services/ai-researcher');
+const EmailFinder = require('../services/email-finder');
 const { Resend } = require('resend');
 
 class AutoOutreachAgent {
@@ -17,6 +18,7 @@ class AutoOutreachAgent {
     // Initialize new services
     this.scorer = new IntelligentScorer();
     this.researcher = new AIResearcher();
+    this.emailFinder = new EmailFinder();
 
     // Resend email client
     this.resend = new Resend(process.env.RESEND_API_KEY);
@@ -92,18 +94,41 @@ class AutoOutreachAgent {
 
           console.log(`   ✅ Qualified (score: ${effectiveScore})`);
 
-          // Step 2: Research with Perplexity
+          // Step 2: Find email if not already discovered
+          let recipientEmail = opp.contact_email || opp.opportunity_data?.discovered_email;
+
+          if (!recipientEmail && opp.company_domain && opp.company_domain !== 'producthunt.com') {
+            console.log(`   📧 Finding email for ${opp.company_domain}...`);
+            try {
+              const emailResult = await this.emailFinder.findEmails(opp.company_name, opp.company_domain);
+              if (emailResult.primaryEmail) {
+                recipientEmail = emailResult.primaryEmail;
+                console.log(`   ✅ Found email: ${recipientEmail}`);
+                // Update the opportunity with discovered email
+                await this.supabase
+                  .from('scored_opportunities')
+                  .update({
+                    contact_email: recipientEmail,
+                    opportunity_data: { ...opp.opportunity_data, discovered_email: recipientEmail }
+                  })
+                  .eq('id', opp.id);
+              } else {
+                console.log(`   ⚠️  No email found for ${opp.company_domain}`);
+              }
+            } catch (emailErr) {
+              console.log(`   ⚠️  Email lookup failed: ${emailErr.message}`);
+            }
+          }
+
+          // Step 3: Research with Perplexity (skipped if no API key)
           console.log(`   🔍 Researching...`);
           const research = await this.researcher.researchLead(opp);
           console.log(`   ✅ Research complete`);
 
-          // Step 3: Generate personalized email
+          // Step 4: Generate personalized email
           const email = this.generatePersonalizedEmail(opp, research, scoring);
 
-          // Get email from contact_email OR opportunity_data.discovered_email
-          const recipientEmail = opp.contact_email || opp.opportunity_data?.discovered_email;
-
-          // Step 4: Send email (if auto-send enabled and email available)
+          // Step 5: Send email (if auto-send enabled and email available)
           if (autoSendEnabled && process.env.RESEND_API_KEY && recipientEmail) {
             console.log(`   📧 Sending email via Resend to ${recipientEmail}...`);
             await this.sendEmail({ ...opp, contact_email: recipientEmail }, email);
