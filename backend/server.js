@@ -113,10 +113,64 @@ app.get('/health', (req, res) => {
       SUPABASE_KEY: !!process.env.SUPABASE_KEY,
       SUPABASE_SERVICE_KEY: !!process.env.SUPABASE_SERVICE_KEY,
       ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
+      PERPLEXITY_API_KEY: !!process.env.PERPLEXITY_API_KEY,
       STRIPE_SECRET_KEY: !!process.env.STRIPE_SECRET_KEY,
       STRIPE_WEBHOOK_SECRET: !!process.env.STRIPE_WEBHOOK_SECRET
-    }
+    },
+    perplexityKeyPrefix: process.env.PERPLEXITY_API_KEY ? process.env.PERPLEXITY_API_KEY.substring(0, 8) + '...' : 'NOT SET'
   });
+});
+
+// Debug endpoint to test Perplexity API directly
+app.get('/api/test-perplexity', async (req, res) => {
+  const axios = require('axios');
+  const apiKey = process.env.PERPLEXITY_API_KEY;
+
+  if (!apiKey) {
+    return res.json({
+      success: false,
+      error: 'PERPLEXITY_API_KEY not set',
+      keyPresent: false
+    });
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.perplexity.ai/chat/completions',
+      {
+        model: 'sonar',
+        messages: [
+          { role: 'user', content: 'Say hello in exactly 5 words.' }
+        ],
+        max_tokens: 50
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 15000
+      }
+    );
+
+    res.json({
+      success: true,
+      keyPresent: true,
+      keyPrefix: apiKey.substring(0, 8) + '...',
+      response: response.data.choices[0].message.content,
+      model: response.data.model
+    });
+
+  } catch (error) {
+    res.json({
+      success: false,
+      keyPresent: true,
+      keyPrefix: apiKey.substring(0, 8) + '...',
+      error: error.message,
+      status: error.response?.status,
+      errorData: error.response?.data
+    });
+  }
 });
 
 // DASHBOARD CONTROL ENDPOINTS

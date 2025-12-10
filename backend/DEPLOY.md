@@ -1,4 +1,4 @@
-# Trigger deploy Tue 10 Dec 2025 11:18:00 PST
-# Added batch research endpoint /api/research-leads
-# Leads must be researched before outreach
-# Fixed research query to properly fetch unresearched leads
+# Trigger deploy Tue 10 Dec 2025 12:05:00 PST
+# Added /api/test-perplexity endpoint to debug Perplexity API
+# Added better error logging for Perplexity failures
+# Added PERPLEXITY_API_KEY check to health endpoint

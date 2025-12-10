@@ -273,14 +273,30 @@ Make it highly specific to their situation.`;
       };
 
     } catch (error) {
-      // Don't spam logs with full HTML error pages
-      const errorMsg = error.response?.status === 401 ? 'Invalid API key' : error.message;
+      // Log more details about the error
+      const statusCode = error.response?.status;
+      const errorData = error.response?.data;
+      let errorMsg = error.message;
+
+      if (statusCode === 401) {
+        errorMsg = 'Invalid API key';
+      } else if (statusCode === 400) {
+        errorMsg = `Bad request: ${JSON.stringify(errorData)}`;
+      } else if (statusCode === 429) {
+        errorMsg = 'Rate limited';
+      } else if (errorData) {
+        errorMsg = `API error (${statusCode}): ${JSON.stringify(errorData)}`;
+      }
+
       console.log(`   ⚠️  Perplexity unavailable (${errorMsg}) - using basic research`);
+      console.log(`   📍 API Key present: ${!!this.perplexityApiKey}, Key prefix: ${this.perplexityApiKey?.substring(0, 8)}...`);
+
       return {
         findings: 'Research skipped - using opportunity data only.',
         sources: [],
         researched_at: new Date().toISOString(),
-        fallback: true
+        fallback: true,
+        error: errorMsg
       };
     }
   }
