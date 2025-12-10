@@ -273,12 +273,14 @@ Make it highly specific to their situation.`;
       };
 
     } catch (error) {
-      console.error('Perplexity API error:', error.response?.data || error.message);
+      // Don't spam logs with full HTML error pages
+      const errorMsg = error.response?.status === 401 ? 'Invalid API key' : error.message;
+      console.log(`   ⚠️  Perplexity unavailable (${errorMsg}) - using basic research`);
       return {
-        error: error.message,
-        findings: 'Research unavailable - API error',
+        findings: 'Research skipped - using opportunity data only.',
         sources: [],
-        researched_at: new Date().toISOString()
+        researched_at: new Date().toISOString(),
+        fallback: true
       };
     }
   }
