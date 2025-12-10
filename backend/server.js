@@ -390,18 +390,23 @@ app.post('/api/research-leads', async (req, res) => {
 
     const { data: leads, error } = await query;
 
-    if (error) throw error;
+    console.log(`   📊 Query returned ${leads?.length || 0} leads`);
+    if (error) {
+      console.log(`   ❌ Query error: ${error.message}`);
+      throw error;
+    }
 
     if (!leads || leads.length === 0) {
-      return res.json({ success: true, message: 'No leads to research', researched: 0 });
+      return res.json({ success: true, message: 'No leads found matching criteria', results: { researched: 0, skipped: 0, errors: [], queryReturned: 0 } });
     }
 
     // Filter to only leads without research
     const unresearched = leads.filter(l => !l.opportunity_data?.lead_research);
+    console.log(`   📋 After filtering: ${unresearched.length} unresearched out of ${leads.length}`);
 
     console.log(`📋 Found ${unresearched.length} unresearched leads out of ${leads.length}`);
 
-    const results = { researched: 0, skipped: 0, errors: [] };
+    const results = { researched: 0, skipped: 0, errors: [], queryReturned: leads.length, unresearchedCount: unresearched.length };
 
     for (const lead of unresearched) {
       try {
