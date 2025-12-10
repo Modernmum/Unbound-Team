@@ -593,6 +593,199 @@ app.get('/api/opportunities', async (req, res) => {
   }
 });
 
+// ============================================
+// TRANSCRIPT & DELIVERY ENDPOINTS
+// For Fireflies integration and client delivery
+// ============================================
+
+// Fireflies.ai webhook - receives call transcripts
+app.post('/api/webhook/fireflies', async (req, res) => {
+  console.log('\n📞 FIREFLIES WEBHOOK RECEIVED\n');
+
+  try {
+    const result = await processTranscript(req.body, 'fireflies');
+    res.json({ success: true, message: 'Transcript processed', analysis: result });
+  } catch (error) {
+    console.error('❌ Fireflies webhook error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Manual transcript upload
+app.post('/api/transcript', async (req, res) => {
+  console.log('\n📞 MANUAL TRANSCRIPT UPLOAD\n');
+
+  const { transcript, email, client_name, business_name } = req.body;
+
+  if (!transcript) {
+    return res.status(400).json({ success: false, error: 'transcript is required' });
+  }
+
+  try {
+    const result = await processTranscript({
+      transcript,
+      attendee_email: email,
+      attendee_name: client_name,
+      business_name
+    }, 'manual');
+
+    res.json({ success: true, message: 'Transcript processed', analysis: result });
+  } catch (error) {
+    console.error('❌ Transcript error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Process transcript helper function
+async function processTranscript(webhookData, source) {
+  const Anthropic = require('@anthropic-ai/sdk').default;
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  // Normalize transcript data
+  const transcript = webhookData.transcript || webhookData.text || webhookData.content || '';
+  const attendeeEmail = webhookData.attendee_email || webhookData.attendees?.[0]?.email;
+  const attendeeName = webhookData.attendee_name;
+  const businessName = webhookData.business_name;
+
+  console.log(`Source: ${source}`);
+  console.log(`Email: ${attendeeEmail || 'Unknown'}`);
+  console.log(`Transcript Length: ${transcript.length} chars\n`);
+
+  if (transcript.length < 100) {
+    return { error: 'Transcript too short', readyToBuy: false };
+  }
+
+  // Analyze with AI
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 2000,
+    messages: [{
+      role: 'user',
+      content: `Analyze this discovery call transcript and extract key information.
+
+TRANSCRIPT:
+${transcript.substring(0, 15000)}
+
+Extract and return as JSON:
+{
+  "clientName": "The client/prospect's name",
+  "businessName": "Their business name",
+  "painPoints": ["List of their main business challenges"],
+  "budget": "Their budget range if mentioned",
+  "urgency": "low/medium/high",
+  "readyToBuy": true/false,
+  "recommendedSolution": "notion_template/custom_template/mvp_build/seo_content/operations_setup/full_coo_service",
+  "summary": "2-3 sentence summary"
+}
+
+Only return valid JSON.`
+    }]
+  });
+
+  let analysis;
+  try {
+    const content = response.content[0].text;
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { error: 'Failed to parse' };
+  } catch (e) {
+    analysis = { error: 'Parse error', readyToBuy: false };
+  }
+
+  console.log('Analysis:', JSON.stringify(analysis, null, 2));
+
+  // Store in database
+  const { data: record, error } = await supabase
+    .from('call_transcripts')
+    .insert({
+      source,
+      attendee_email: attendeeEmail,
+      attendee_name: analysis.clientName || attendeeName,
+      business_name: analysis.businessName || businessName,
+      transcript_text: transcript,
+      ai_analysis: analysis,
+      pain_points: analysis.painPoints || [],
+      recommended_solution: analysis.recommendedSolution,
+      ready_to_buy: analysis.readyToBuy || false,
+      processed_at: new Date().toISOString()
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('DB Error:', error.message);
+  } else {
+    console.log(`✅ Transcript stored: ${record.id}`);
+  }
+
+  // If ready to buy, send notification
+  if (analysis.readyToBuy && attendeeEmail) {
+    console.log('🚀 Client ready to buy - triggering notification');
+    // Could trigger email here via Resend
+  }
+
+  return analysis;
+}
+
+// Start delivery for client
+app.post('/api/deliver', async (req, res) => {
+  console.log('\n🚀 CLIENT DELIVERY TRIGGERED\n');
+
+  const { email, businessName, serviceType, painPoints, transcriptId } = req.body;
+
+  if (!email || !serviceType) {
+    return res.status(400).json({ success: false, error: 'email and serviceType required' });
+  }
+
+  try {
+    // Create client record
+    const { data: client, error } = await supabase
+      .from('mfs_clients')
+      .insert({
+        business_name: businessName || 'New Client',
+        contact_email: email,
+        service_type: serviceType,
+        pain_points: painPoints || [],
+        transcript_id: transcriptId,
+        status: 'active',
+        onboarded_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Client creation error:', error.message);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    console.log(`✅ Client created: ${client.id}`);
+    console.log(`Service: ${serviceType}`);
+
+    res.json({
+      success: true,
+      message: 'Delivery started',
+      clientId: client.id,
+      serviceType
+    });
+  } catch (error) {
+    console.error('❌ Delivery error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// List available services
+app.get('/api/services', (req, res) => {
+  res.json({
+    services: [
+      { id: 'notion_template', name: 'Notion Template', price: '$47-197' },
+      { id: 'custom_template', name: 'Custom Template', price: '$297-497' },
+      { id: 'mvp_build', name: 'Rapid MVP', price: '$997-2997' },
+      { id: 'seo_content', name: 'SEO Content', price: '$497-1497' },
+      { id: 'operations_setup', name: 'Operations Setup', price: '$1997-4997' },
+      { id: 'full_coo_service', name: 'Fractional COO', price: '$2500/month' }
+    ]
+  });
+});
+
 // Error handling
 app.use((error, req, res, next) => {
   console.error('Server error:', error);
