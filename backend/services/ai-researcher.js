@@ -12,7 +12,8 @@ class AIResearcher {
   }
 
   /**
-   * Complete research on a lead using Perplexity
+   * Complete research on a lead using Perplexity - SINGLE consolidated API call
+   * Cost-optimized: 1 call per lead instead of 8
    */
   async researchLead(opportunity) {
     console.log(`🔍 Researching: ${opportunity.company_name}`);
@@ -23,32 +24,95 @@ class AIResearcher {
       researched_at: new Date().toISOString(),
     };
 
-    // 1. Company Background Research (Perplexity searches the web)
-    research.companyBackground = await this.searchCompanyBackground(opportunity);
+    // SINGLE consolidated research call
+    const consolidatedResult = await this.consolidatedResearch(opportunity);
 
-    // 2. Pain Point & Problem Research
-    research.painPointAnalysis = await this.researchPainPoints(opportunity);
-
-    // 3. Decision Maker Research
-    research.decisionMaker = await this.findDecisionMaker(opportunity);
-
-    // 4. CONTACT EMAIL DISCOVERY - Critical for outreach
-    research.contactDiscovery = await this.findContactEmail(opportunity);
-
-    // 5. Recent Activity & News
-    research.recentActivity = await this.findRecentActivity(opportunity);
-
-    // 6. Competitor & Market Context
-    research.marketContext = await this.researchMarketContext(opportunity);
-
-    // 7. Personalization Hooks
-    research.personalizationHooks = await this.extractPersonalizationHooks(research);
-
-    // 8. Custom Approach
-    research.recommendedApproach = await this.generateApproach(research);
+    // Parse the consolidated response into structured sections
+    research.companyBackground = { findings: consolidatedResult.company_background || '' };
+    research.painPointAnalysis = { findings: consolidatedResult.pain_points || '' };
+    research.decisionMaker = { findings: consolidatedResult.decision_maker || '' };
+    research.personalizationHooks = { findings: consolidatedResult.personalization_hooks || '' };
+    research.recommendedApproach = { findings: consolidatedResult.recommended_approach || '' };
+    research.sources = consolidatedResult.sources || [];
+    research.raw_response = consolidatedResult.raw_response;
 
     console.log(`✅ Research complete for ${opportunity.company_name}`);
     return research;
+  }
+
+  /**
+   * Single consolidated Perplexity call - all research in one request
+   */
+  async consolidatedResearch(opportunity) {
+    const domain = opportunity.company_domain || '';
+    const query = `Research this business for B2B outreach:
+
+Company: ${opportunity.company_name}
+${domain ? `Website: ${domain}` : ''}
+${opportunity.contact_email ? `Contact: ${opportunity.contact_email}` : ''}
+
+Provide a CONCISE research report with these sections:
+
+1. COMPANY BACKGROUND (2-3 sentences): What they do, their stage/size, industry
+
+2. PAIN POINTS (2-3 bullet points): Their likely challenges with client acquisition, marketing, or growth
+
+3. DECISION MAKER: Name and role of founder/owner if findable
+
+4. PERSONALIZATION HOOKS (2-3 specific details): Recent activity, achievements, or unique aspects we can reference
+
+5. RECOMMENDED APPROACH (1-2 sentences): Best angle to pitch autonomous client acquisition systems
+
+Keep each section brief and actionable. Focus on what's relevant for cold B2B outreach.`;
+
+    const result = await this.askPerplexity(query);
+
+    if (result.fallback) {
+      return {
+        company_background: `${opportunity.company_name} - details from LinkedIn import`,
+        pain_points: 'Based on industry: likely needs help with lead generation and client acquisition',
+        decision_maker: opportunity.contact_name || 'Unknown',
+        personalization_hooks: `Works in ${opportunity.industry || 'their industry'}`,
+        recommended_approach: 'Focus on automating their client acquisition process',
+        sources: [],
+        raw_response: result.findings
+      };
+    }
+
+    // Parse the response into sections
+    const response = result.findings || '';
+    return {
+      company_background: this.extractSection(response, 'COMPANY BACKGROUND', 'PAIN POINTS'),
+      pain_points: this.extractSection(response, 'PAIN POINTS', 'DECISION MAKER'),
+      decision_maker: this.extractSection(response, 'DECISION MAKER', 'PERSONALIZATION'),
+      personalization_hooks: this.extractSection(response, 'PERSONALIZATION', 'RECOMMENDED'),
+      recommended_approach: this.extractSection(response, 'RECOMMENDED APPROACH', null),
+      sources: result.sources || [],
+      raw_response: response
+    };
+  }
+
+  /**
+   * Extract a section from the response text
+   */
+  extractSection(text, startMarker, endMarker) {
+    try {
+      const startIdx = text.toUpperCase().indexOf(startMarker);
+      if (startIdx === -1) return '';
+
+      let endIdx = text.length;
+      if (endMarker) {
+        const found = text.toUpperCase().indexOf(endMarker, startIdx + startMarker.length);
+        if (found !== -1) endIdx = found;
+      }
+
+      return text.substring(startIdx + startMarker.length, endIdx)
+        .replace(/^[:\s]+/, '')
+        .trim()
+        .substring(0, 500); // Limit length
+    } catch (e) {
+      return '';
+    }
   }
 
   /**

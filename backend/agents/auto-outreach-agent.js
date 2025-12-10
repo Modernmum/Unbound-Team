@@ -81,10 +81,17 @@ class AutoOutreachAgent {
 
       for (const opp of opportunities) {
         try {
-          // Step 0: Check if lead has been researched
-          if (!opp.opportunity_data?.lead_research) {
-            console.log(`\n⏭️  Skipping ${opp.company_name} - not yet researched`);
+          // Step 0: Check if lead has LinkedIn data OR has been researched
+          const hasLinkedInData = opp.opportunity_data?.contact_first_name || opp.opportunity_data?.job_title;
+          const hasResearch = opp.opportunity_data?.lead_research;
+
+          if (!hasLinkedInData && !hasResearch) {
+            console.log(`\n⏭️  Skipping ${opp.company_name} - no LinkedIn data and not researched`);
             continue; // Don't mark as processed - will be picked up after research
+          }
+
+          if (hasLinkedInData) {
+            console.log(`\n📧 Processing LinkedIn lead: ${opp.company_name} (${opp.opportunity_data?.job_title || 'No title'})`);
           }
 
           // Step 1: Score the opportunity
@@ -215,21 +222,161 @@ class AutoOutreachAgent {
   }
 
   generatePersonalizedEmail(opportunity, research, scoring) {
+    // Use LinkedIn-only personalization if we have LinkedIn data
+    const oppData = opportunity.opportunity_data || {};
+    const hasLinkedInData = oppData.contact_first_name || oppData.job_title;
+
+    if (hasLinkedInData) {
+      return this.generateLinkedInEmail(opportunity);
+    }
+
+    // Fallback to research-based email if no LinkedIn data
+    return this.generateResearchEmail(opportunity, research);
+  }
+
+  /**
+   * Generate personalized email using LinkedIn data directly - NO API calls
+   * This is the $0 approach similar to Apollo/Instantly/Lemlist
+   */
+  generateLinkedInEmail(opportunity) {
+    const oppData = opportunity.opportunity_data || {};
+    const firstName = oppData.contact_first_name || 'there';
+    const fullName = oppData.contact_full_name || '';
+    const jobTitle = oppData.job_title || '';
+    const company = opportunity.company_name || 'your company';
+
+    // Detect role category for personalized messaging
+    const roleCategory = this.detectRoleCategory(jobTitle);
+    const painPoint = this.inferPainPoint(roleCategory, jobTitle);
+    const valueHook = this.getValueHook(roleCategory);
+
+    // Personalized subject lines based on role
+    const subjects = {
+      'executive': `${firstName}, a client acquisition system for ${company}`,
+      'founder': `Quick question about ${company}'s growth, ${firstName}`,
+      'consultant': `${firstName} - how consultants are automating client acquisition`,
+      'coach': `${firstName}, filling your coaching calendar automatically`,
+      'sales': `${firstName}, automating the top-of-funnel for ${company}`,
+      'marketing': `${firstName} - AI-powered lead gen for ${company}`,
+      'default': `${firstName}, automating client acquisition for ${company}`
+    };
+
+    const subject = subjects[roleCategory] || subjects.default;
+
+    // Build personalized body
+    let body = `Hi ${firstName},\n\n`;
+
+    // Role-specific opening
+    if (roleCategory === 'founder' || roleCategory === 'executive') {
+      body += `As ${jobTitle ? `a ${jobTitle}` : 'a leader'} at ${company}, I imagine your time is precious - so I'll be brief.\n\n`;
+    } else if (roleCategory === 'consultant' || roleCategory === 'coach') {
+      body += `I came across your profile and noticed you're ${jobTitle ? `a ${jobTitle}` : 'in the consulting/coaching space'}. ${painPoint}\n\n`;
+    } else if (jobTitle) {
+      body += `I noticed your role as ${jobTitle} at ${company} and thought this might be relevant.\n\n`;
+    } else {
+      body += `I came across ${company} and wanted to reach out.\n\n`;
+    }
+
+    // Value proposition
+    body += `We build autonomous client acquisition systems that:\n`;
+    body += `• Find qualified prospects in your target market automatically\n`;
+    body += `• Send personalized outreach based on each lead's specific situation\n`;
+    body += `• Book qualified calls directly on your calendar\n`;
+    body += `• Run 24/7 without any manual effort\n\n`;
+
+    // Role-specific closer
+    if (valueHook) {
+      body += `${valueHook}\n\n`;
+    }
+
+    body += `Would a quick 15-minute call make sense to see if there's a fit?\n\n`;
+    body += `Best,\n`;
+    body += `Maggie Forbes\n`;
+    body += `Unbound.Team\n\n`;
+    body += `P.S. This entire outreach was automated - from finding you on LinkedIn to sending this personalized email. Same system we'd build for ${company}.`;
+
+    return { subject, body };
+  }
+
+  /**
+   * Detect role category from job title for personalization
+   */
+  detectRoleCategory(jobTitle) {
+    if (!jobTitle) return 'default';
+    const title = jobTitle.toLowerCase();
+
+    if (title.includes('ceo') || title.includes('chief') || title.includes('president') || title.includes('managing director')) {
+      return 'executive';
+    }
+    if (title.includes('founder') || title.includes('owner') || title.includes('co-founder')) {
+      return 'founder';
+    }
+    if (title.includes('consultant') || title.includes('advisor') || title.includes('strategist')) {
+      return 'consultant';
+    }
+    if (title.includes('coach') || title.includes('trainer') || title.includes('facilitator') || title.includes('speaker')) {
+      return 'coach';
+    }
+    if (title.includes('sales') || title.includes('business development') || title.includes('account')) {
+      return 'sales';
+    }
+    if (title.includes('marketing') || title.includes('growth') || title.includes('demand')) {
+      return 'marketing';
+    }
+    return 'default';
+  }
+
+  /**
+   * Infer pain point based on role
+   */
+  inferPainPoint(roleCategory, jobTitle) {
+    const painPoints = {
+      'executive': 'Scaling client acquisition is often the bottleneck to growth.',
+      'founder': 'Most founders I talk to spend too much time on sales instead of building.',
+      'consultant': 'Most consultants I talk to are great at delivery but struggle to keep the pipeline full.',
+      'coach': 'The challenge I hear from coaches: spending more time marketing than actually coaching.',
+      'sales': 'The manual prospecting grind takes time away from actually closing deals.',
+      'marketing': 'Generating quality leads that actually convert is always the challenge.',
+      'default': ''
+    };
+    return painPoints[roleCategory] || '';
+  }
+
+  /**
+   * Get value hook based on role
+   */
+  getValueHook(roleCategory) {
+    const hooks = {
+      'executive': 'Our clients typically see their calendar filled with qualified meetings within the first 2 weeks.',
+      'founder': 'Imagine waking up to a calendar full of qualified calls - without lifting a finger.',
+      'consultant': 'Our consultant clients typically add 5-10 qualified conversations per week to their pipeline.',
+      'coach': 'Several coaches we work with have completely eliminated cold outreach from their routine.',
+      'sales': 'We handle the top-of-funnel so you can focus on what you do best - closing.',
+      'marketing': 'Think of it as a lead gen engine that runs itself.',
+      'default': ''
+    };
+    return hooks[roleCategory] || '';
+  }
+
+  /**
+   * Fallback: Generate email from Perplexity research
+   */
+  generateResearchEmail(opportunity, research) {
     const company = opportunity.company_name;
 
     // Extract research findings
     let companyInfo = '';
-    if (research.companyBackground?.findings) {
+    if (research?.companyBackground?.findings) {
       companyInfo = research.companyBackground.findings.split('\n').slice(0, 2).join(' ').substring(0, 250);
     }
 
     let painPoint = '';
-    if (research.painPointAnalysis?.findings) {
+    if (research?.painPointAnalysis?.findings) {
       painPoint = research.painPointAnalysis.findings.split('\n').slice(0, 2).join(' ').substring(0, 200);
     }
 
     let hook = '';
-    if (research.personalizationHooks?.findings) {
+    if (research?.personalizationHooks?.findings) {
       hook = research.personalizationHooks.findings.split('\n').slice(0, 2).join(' ').substring(0, 150);
     }
 
