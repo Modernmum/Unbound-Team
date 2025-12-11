@@ -1372,6 +1372,305 @@ app.delete('/api/test-data/:table/:id', async (req, res) => {
   res.json({ success: true, message: `Deleted ${id} from ${table}` });
 });
 
+// ============================================
+// AUTONOMOUS EMAIL ENGINE ENDPOINTS
+// ============================================
+
+const AutonomousEmailEngine = require('./services/autonomous-email-engine');
+const emailEngine = new AutonomousEmailEngine();
+
+// Resend Webhook - receives email events (opens, clicks, bounces, replies)
+app.post('/api/webhook/resend', express.raw({ type: 'application/json' }), async (req, res) => {
+  console.log('\n📬 RESEND WEBHOOK RECEIVED');
+
+  try {
+    // Parse the raw body
+    const payload = req.body.toString();
+    const event = JSON.parse(payload);
+
+    // Verify signature if webhook secret is configured
+    const signature = req.headers['resend-signature'];
+    if (process.env.RESEND_WEBHOOK_SECRET && signature) {
+      const isValid = emailEngine.verifyWebhookSignature(payload, signature);
+      if (!isValid) {
+        console.log('⚠️ Invalid webhook signature');
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+    }
+
+    // Process the event
+    const result = await emailEngine.processWebhook(event);
+
+    res.json({ received: true, ...result });
+
+  } catch (error) {
+    console.error('❌ Resend webhook error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Inbound Email Webhook - receives email replies
+// Configure this in Resend dashboard under Inbound Emails
+app.post('/api/webhook/email-reply', async (req, res) => {
+  console.log('\n📨 INBOUND EMAIL REPLY RECEIVED');
+
+  try {
+    const inboundEmail = req.body;
+
+    // Process the reply
+    const result = await emailEngine.processIncomingReply(inboundEmail);
+
+    res.json({ received: true, ...result });
+
+  } catch (error) {
+    console.error('❌ Email reply error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Open Tracking Pixel
+app.get('/api/track/open/:campaignId', async (req, res) => {
+  const { campaignId } = req.params;
+
+  try {
+    const pixel = await emailEngine.trackOpen(campaignId);
+
+    res.set({
+      'Content-Type': 'image/gif',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    res.send(pixel);
+
+  } catch (error) {
+    console.error('Track open error:', error);
+    // Still return pixel even on error
+    const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+    res.set('Content-Type', 'image/gif');
+    res.send(pixel);
+  }
+});
+
+// Click Tracking & Redirect
+app.get('/api/track/click/:campaignId', async (req, res) => {
+  const { campaignId } = req.params;
+  const { url } = req.query;
+
+  if (!url) {
+    return res.status(400).json({ error: 'Missing url parameter' });
+  }
+
+  try {
+    const targetUrl = await emailEngine.trackClick(campaignId, decodeURIComponent(url));
+    res.redirect(302, targetUrl);
+
+  } catch (error) {
+    console.error('Track click error:', error);
+    // Redirect anyway
+    res.redirect(302, decodeURIComponent(url));
+  }
+});
+
+// Unsubscribe Handler
+app.get('/api/unsubscribe/:email', async (req, res) => {
+  const { email } = req.params;
+
+  try {
+    // Add to unsubscribe list
+    await supabase
+      .from('email_blocklist')
+      .upsert({
+        email: decodeURIComponent(email).toLowerCase(),
+        reason: 'unsubscribe',
+        details: 'user_requested',
+        created_at: new Date().toISOString()
+      }, { onConflict: 'email' });
+
+    // Update any campaigns for this email
+    await supabase
+      .from('outreach_campaigns')
+      .update({
+        status: 'unsubscribed',
+        unsubscribed_at: new Date().toISOString(),
+        unsubscribe_reason: 'user_requested'
+      })
+      .eq('recipient_email', decodeURIComponent(email).toLowerCase());
+
+    // Return a simple confirmation page
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Unsubscribed</title>
+        <style>
+          body { font-family: system-ui, sans-serif; max-width: 600px; margin: 100px auto; padding: 20px; text-align: center; }
+          h1 { color: #333; }
+          p { color: #666; }
+        </style>
+      </head>
+      <body>
+        <h1>You've been unsubscribed</h1>
+        <p>You will no longer receive emails from us.</p>
+        <p>If this was a mistake, please contact us directly.</p>
+      </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error('Unsubscribe error:', error);
+    res.status(500).send('Error processing unsubscribe request');
+  }
+});
+
+// One-Click Unsubscribe (List-Unsubscribe-Post header support)
+app.post('/api/unsubscribe/:email', async (req, res) => {
+  const { email } = req.params;
+
+  try {
+    await supabase
+      .from('email_blocklist')
+      .upsert({
+        email: decodeURIComponent(email).toLowerCase(),
+        reason: 'unsubscribe',
+        details: 'one_click_unsubscribe',
+        created_at: new Date().toISOString()
+      }, { onConflict: 'email' });
+
+    res.status(200).send('Unsubscribed');
+
+  } catch (error) {
+    console.error('One-click unsubscribe error:', error);
+    res.status(500).send('Error');
+  }
+});
+
+// Get Email Engine Stats
+app.get('/api/email-engine/stats', async (req, res) => {
+  try {
+    const stats = emailEngine.getStats();
+    res.json({ success: true, stats });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get Email Analytics
+app.get('/api/email-engine/analytics', async (req, res) => {
+  const { days = 30 } = req.query;
+
+  try {
+    const analytics = await emailEngine.getAnalytics(parseInt(days));
+    res.json({ success: true, analytics });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Manually trigger follow-up processing
+app.post('/api/email-engine/process-followups', async (req, res) => {
+  try {
+    const count = await emailEngine.processFollowUpQueue();
+    res.json({ success: true, followUpsSent: count });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Start/Stop Email Engine
+app.post('/api/email-engine/start', async (req, res) => {
+  try {
+    await emailEngine.start();
+    res.json({ success: true, message: 'Email engine started' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/email-engine/stop', (req, res) => {
+  try {
+    emailEngine.stop();
+    res.json({ success: true, message: 'Email engine stopped' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Configure follow-up sequence timing
+app.post('/api/email-engine/configure-sequence', async (req, res) => {
+  const { sequence } = req.body;
+
+  // sequence format: [{ delay: 72, type: 'follow_up_1', subject: '...' }, ...]
+  if (!sequence || !Array.isArray(sequence)) {
+    return res.status(400).json({ error: 'sequence array required' });
+  }
+
+  try {
+    // Store custom sequence in database
+    await supabase
+      .from('followup_sequences')
+      .upsert({
+        name: 'Custom Sequence',
+        description: 'User-configured follow-up timing',
+        is_default: false,
+        steps: sequence,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'name' });
+
+    // Update engine's in-memory sequence
+    emailEngine.defaultSequence = sequence;
+
+    res.json({ success: true, message: 'Sequence configured', sequence });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get current sequence configuration
+app.get('/api/email-engine/sequence', (req, res) => {
+  res.json({
+    success: true,
+    sequence: emailEngine.defaultSequence,
+    calendlyLink: emailEngine.calendlyLink
+  });
+});
+
+// Update Calendly link
+app.post('/api/email-engine/calendly-link', (req, res) => {
+  const { calendlyLink } = req.body;
+
+  if (!calendlyLink) {
+    return res.status(400).json({ error: 'calendlyLink required' });
+  }
+
+  emailEngine.calendlyLink = calendlyLink;
+  res.json({ success: true, calendlyLink });
+});
+
+// Manual reply processing (for testing or importing)
+app.post('/api/email-engine/process-reply', async (req, res) => {
+  const { from, subject, text, html } = req.body;
+
+  if (!from || (!text && !html)) {
+    return res.status(400).json({ error: 'from and text/html required' });
+  }
+
+  try {
+    const result = await emailEngine.processIncomingReply({
+      from,
+      subject: subject || 'Re: Follow-up',
+      text,
+      html
+    });
+
+    res.json({ success: true, ...result });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Error handling
 app.use((error, req, res, next) => {
   console.error('Server error:', error);
@@ -1477,6 +1776,17 @@ app.listen(PORT, () => {
 
   // Auto-start agents after server is ready (wait 5 seconds for services to initialize)
   setTimeout(autoStartAgents, 5000);
+
+  // Auto-start the autonomous email engine
+  setTimeout(async () => {
+    console.log('\n📧 Starting Autonomous Email Engine...');
+    try {
+      await emailEngine.start();
+      console.log('✅ Autonomous Email Engine is running');
+    } catch (error) {
+      console.error('❌ Failed to start email engine:', error.message);
+    }
+  }, 7000);
 });
 
 module.exports = app;
