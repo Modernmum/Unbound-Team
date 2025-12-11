@@ -90,6 +90,22 @@ const agentStats = {
   'auto-delivery': { status: 'stopped', lastRun: null, deliveriesCompleted: 0 }
 };
 
+// Debug - show exactly what env vars the server sees (masked for security)
+app.get('/api/debug-env', (req, res) => {
+  const supabaseUrl = process.env.SUPABASE_URL || 'NOT SET';
+  const projectId = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'unknown';
+
+  res.json({
+    supabase_project_id: projectId,
+    supabase_url_set: !!process.env.SUPABASE_URL,
+    supabase_key_set: !!process.env.SUPABASE_KEY,
+    supabase_service_key_set: !!process.env.SUPABASE_SERVICE_KEY,
+    node_env: process.env.NODE_ENV,
+    railway_env: process.env.RAILWAY_ENVIRONMENT,
+    server_start_time: new Date().toISOString()
+  });
+});
+
 // Database diagnostic - check all tables and counts
 app.get('/api/db-check', async (req, res) => {
   try {
