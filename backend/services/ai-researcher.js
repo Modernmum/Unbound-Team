@@ -323,25 +323,22 @@ Make it highly specific to their situation as an established leader.`;
   }
 
   /**
-   * Ask Perplexity for research (with fallback)
+   * Ask Perplexity for research with retry logic
+   * Retries up to 3 times on failure, validates response before returning
    */
-  async askPerplexity(query) {
-    // If no API key, return basic research from available data
+  async askPerplexity(query, retryCount = 0) {
+    const MAX_RETRIES = 3;
+
+    // If no API key, throw error - don't silently fail
     if (!this.perplexityApiKey) {
-      console.log('   ⚠️  Perplexity API key not configured - using basic research');
-      return {
-        findings: 'Perplexity research unavailable - API key not configured. Using opportunity data only.',
-        sources: [],
-        researched_at: new Date().toISOString(),
-        fallback: true
-      };
+      throw new Error('Perplexity API key not configured');
     }
 
     try {
       const response = await axios.post(
         this.perplexityEndpoint,
         {
-          model: 'sonar', // Online model for web search
+          model: 'sonar',
           messages: [
             {
               role: 'system',
@@ -360,12 +357,17 @@ Make it highly specific to their situation as an established leader.`;
             'Authorization': `Bearer ${this.perplexityApiKey}`,
             'Content-Type': 'application/json'
           },
-          timeout: 30000
+          timeout: 45000 // Increased timeout
         }
       );
 
-      const content = response.data.choices[0].message.content;
+      const content = response.data.choices[0]?.message?.content;
       const citations = response.data.citations || [];
+
+      // VALIDATE: Make sure we got actual content
+      if (!content || content.length < 100) {
+        throw new Error('Perplexity returned empty or too-short response');
+      }
 
       return {
         findings: content,
@@ -374,7 +376,6 @@ Make it highly specific to their situation as an established leader.`;
       };
 
     } catch (error) {
-      // Log more details about the error
       const statusCode = error.response?.status;
       const errorData = error.response?.data;
       let errorMsg = error.message;
@@ -389,10 +390,17 @@ Make it highly specific to their situation as an established leader.`;
         errorMsg = `API error (${statusCode}): ${JSON.stringify(errorData)}`;
       }
 
-      console.log(`   ❌ Perplexity FAILED (${errorMsg}) - NOT saving placeholder`);
-      console.log(`   📍 API Key present: ${!!this.perplexityApiKey}, Key prefix: ${this.perplexityApiKey?.substring(0, 8)}...`);
+      // RETRY on timeout or rate limit
+      const isRetryable = statusCode === 429 || error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
 
-      // THROW error instead of returning fallback - don't save garbage data
+      if (isRetryable && retryCount < MAX_RETRIES) {
+        const waitTime = (retryCount + 1) * 5000; // 5s, 10s, 15s
+        console.log(`   ⏳ Retry ${retryCount + 1}/${MAX_RETRIES} in ${waitTime/1000}s (${errorMsg})`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        return this.askPerplexity(query, retryCount + 1);
+      }
+
+      console.log(`   ❌ Perplexity FAILED after ${retryCount} retries (${errorMsg})`);
       throw new Error(`Perplexity research failed: ${errorMsg}`);
     }
   }
