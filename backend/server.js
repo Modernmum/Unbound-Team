@@ -738,22 +738,13 @@ app.post('/api/discover-company', async (req, res) => {
 function generateDiscoveryEmail(opportunity, research, scoring) {
   const company = opportunity.company_name;
 
+  // Extract company background for personalized opening
   let companyInfo = '';
   if (research.companyBackground?.findings) {
     companyInfo = research.companyBackground.findings.split('\n').slice(0, 2).join(' ').substring(0, 200);
   }
 
-  let painPoint = '';
-  if (research.painPointAnalysis?.findings) {
-    painPoint = research.painPointAnalysis.findings.split('\n').slice(0, 2).join(' ').substring(0, 150);
-  }
-
-  let hook = '';
-  if (research.personalizationHooks?.findings) {
-    hook = research.personalizationHooks.findings.split('\n').slice(0, 1).join(' ').substring(0, 150);
-  }
-
-  // Get decision maker name if available
+  // Get decision maker first name if available
   let firstName = '';
   if (research.decisionMaker?.findings) {
     const dmMatch = research.decisionMaker.findings.match(/([A-Z][a-z]+)\s+[A-Z]/);
@@ -764,30 +755,27 @@ function generateDiscoveryEmail(opportunity, research, scoring) {
 
   let body = firstName ? `Hi ${firstName},\n\n` : `Hi,\n\n`;
 
-  // Opening with personalization hook
-  if (hook) {
-    body += `${hook} - impressive work building ${company}.\n\n`;
-  } else if (companyInfo) {
-    body += `I came across ${company} - ${companyInfo.substring(0, 100)}...\n\n`;
+  // Personalized opening based on company research
+  if (companyInfo && companyInfo.length > 50) {
+    // Extract years in business or key achievement from research
+    const yearsMatch = companyInfo.match(/(\d+)\+?\s*years?/i);
+    const years = yearsMatch ? yearsMatch[1] : null;
+
+    if (years) {
+      body += `After ${years}+ years building ${company}, I'd imagine you're thinking about what the next chapter looks like.\n\n`;
+    } else {
+      body += `After building ${company} into what it is today, I'd imagine you're thinking about what the next chapter looks like.\n\n`;
+    }
   } else {
-    body += `I came across ${company} and wanted to reach out.\n\n`;
+    body += `After building ${company} into what it is today, I'd imagine you're thinking about what the next chapter looks like.\n\n`;
   }
 
-  // Address the growth ceiling
-  body += `Most organizations between $3M and $25M hit a ceiling - not from lack of capability, but from infrastructure that wasn't designed to scale.\n\n`;
+  body += `Not slowing down necessarily - but maybe building something that doesn't require you in every client conversation. Something that runs with the same quality whether you're in the room or not.\n\n`;
 
-  if (painPoint) {
-    body += `What I've observed in your space: ${painPoint.substring(0, 120)}...\n\n`;
-  }
+  body += `That's the gap I help leaders close. Not by adding more complexity, but by architecting systems that let you choose where to spend your time.\n\n`;
 
-  body += `I work with leaders of established organizations who face what I call "The Architecture Gap":\n\n`;
-  body += `- Strategic decisions that all flow through you\n`;
-  body += `- Revenue dependent on relationships rather than systems\n`;
-  body += `- Technology creating more work instead of leverage\n\n`;
+  body += `If you're ready to make your next move, I'd enjoy a conversation.\n\n`;
 
-  body += `I architect intelligent growth systems that create predictable opportunity flow - without operational chaos.\n\n`;
-
-  body += `Would a brief conversation make sense to see if there's alignment?\n\n`;
   body += `Best,\n`;
   body += `Maggie Forbes\n`;
   body += `Maggie Forbes Strategies`;
