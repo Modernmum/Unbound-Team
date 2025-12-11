@@ -90,6 +90,56 @@ const agentStats = {
   'auto-delivery': { status: 'stopped', lastRun: null, deliveriesCompleted: 0 }
 };
 
+// Database diagnostic - check all tables and counts
+app.get('/api/db-check', async (req, res) => {
+  try {
+    const tables = [
+      'scored_opportunities',
+      'mfs_leads',
+      'opportunities',
+      'leads',
+      'contacts',
+      'outreach_campaigns',
+      'market_gaps',
+      'email_blocklist',
+      'email_engagement'
+    ];
+
+    const results = {};
+
+    for (const table of tables) {
+      try {
+        const { data, error, count } = await supabase
+          .from(table)
+          .select('*', { count: 'exact', head: true });
+
+        if (error) {
+          results[table] = { exists: false, error: error.message };
+        } else {
+          // Get a sample row
+          const { data: sample } = await supabase
+            .from(table)
+            .select('*')
+            .limit(1);
+
+          results[table] = {
+            exists: true,
+            count: count,
+            sampleColumns: sample?.[0] ? Object.keys(sample[0]) : []
+          };
+        }
+      } catch (e) {
+        results[table] = { exists: false, error: e.message };
+      }
+    }
+
+    res.json({ success: true, tables: results });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
