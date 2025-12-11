@@ -389,16 +389,11 @@ Make it highly specific to their situation as an established leader.`;
         errorMsg = `API error (${statusCode}): ${JSON.stringify(errorData)}`;
       }
 
-      console.log(`   ⚠️  Perplexity unavailable (${errorMsg}) - using basic research`);
+      console.log(`   ❌ Perplexity FAILED (${errorMsg}) - NOT saving placeholder`);
       console.log(`   📍 API Key present: ${!!this.perplexityApiKey}, Key prefix: ${this.perplexityApiKey?.substring(0, 8)}...`);
 
-      return {
-        findings: 'Research skipped - using opportunity data only.',
-        sources: [],
-        researched_at: new Date().toISOString(),
-        fallback: true,
-        error: errorMsg
-      };
+      // THROW error instead of returning fallback - don't save garbage data
+      throw new Error(`Perplexity research failed: ${errorMsg}`);
     }
   }
 
