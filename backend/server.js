@@ -3,6 +3,7 @@ const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const { spawn } = require('child_process');
 const Stripe = require('stripe');
+const { Resend } = require('resend');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -922,6 +923,45 @@ app.get('/api/emails/stats', async (req, res) => {
         conversions: 0
       }
     });
+  }
+});
+
+// Send a single email via Resend
+app.post('/api/send-email', async (req, res) => {
+  try {
+    const { to, subject, body, from_name } = req.body;
+
+    if (!to || !subject || !body) {
+      return res.status(400).json({ error: 'Missing required fields: to, subject, body' });
+    }
+
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(500).json({ error: 'Resend API key not configured' });
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const fromEmail = process.env.FROM_EMAIL || 'maggie@maggieforbesstrategies.com';
+    const senderName = from_name || 'Maggie Forbes';
+
+    const { data, error } = await resend.emails.send({
+      from: `${senderName} <${fromEmail}>`,
+      to: to,
+      subject: subject,
+      text: body,
+      html: body.replace(/\n/g, '<br>')
+    });
+
+    if (error) {
+      console.error('Resend error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    console.log(`✅ Email sent to ${to}: ${data.id}`);
+    res.json({ success: true, message_id: data.id, to, subject });
+
+  } catch (error) {
+    console.error('Send email error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
