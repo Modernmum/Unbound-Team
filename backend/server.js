@@ -1239,9 +1239,11 @@ app.use((error, req, res, next) => {
 async function autoStartAgents() {
   console.log('🤖 Auto-starting autonomous agents...');
 
+  // NOTE: auto-outreach removed from auto-start to prevent email spam
+  // It was sending to the same 3 people repeatedly. Only start manually after fixing.
   const agentMap = {
     'gap-finder': './agents/gap-finder-agent.js',
-    'auto-outreach': './agents/auto-outreach-agent.js',
+    // 'auto-outreach': './agents/auto-outreach-agent.js',  // DISABLED - needs fixing
     'auto-delivery': './agents/auto-delivery-agent.js'
   };
 
