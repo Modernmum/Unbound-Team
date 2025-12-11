@@ -784,10 +784,21 @@ function generateDiscoveryEmail(opportunity, research, scoring) {
   // Find a specific hook from research (achievement, recognition, etc.)
   let personalHook = '';
   if (hooks && hooks.length > 20) {
-    // Look for achievements, awards, growth milestones
-    const hookMatch = hooks.match(/(?:recognized|award|growth|milestone|achievement|speaker|author|featured)[^.]*\./i);
-    if (hookMatch) {
-      personalHook = hookMatch[0].replace(/^\*+\s*/, '').trim();
+    // Look for specific achievements - sentences with key indicators
+    const hookPatterns = [
+      /(?:recognized|award|won|received|named|featured|speaker|keynote|author|published|grew|scaled|expanded)[^.]{10,80}\./gi,
+      /(?:founded|established|built|created)[^.]{5,50}(?:in \d{4}|over \d+)[^.]*\./gi,
+      /(?:\d+\s*years?)[^.]{10,60}\./gi
+    ];
+
+    for (const pattern of hookPatterns) {
+      const matches = hooks.match(pattern);
+      if (matches && matches[0].length > 15) {
+        personalHook = matches[0].replace(/^\*+\s*/, '').replace(/^\s*-\s*/, '').trim();
+        // Make sure it's a complete, meaningful sentence
+        if (personalHook.length > 20 && personalHook.length < 120) break;
+        personalHook = ''; // Reset if not good
+      }
     }
   }
 
