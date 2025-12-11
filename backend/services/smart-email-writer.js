@@ -115,6 +115,7 @@ class SmartEmailWriter {
         angle: 'imported_lead_' + roleType,
         confidence: firstName ? 'medium' : 'low',
         researchQuality: 'imported_only',
+        company: company, // For validation
         dataUsed: { firstName: !!firstName, jobTitle: !!jobTitle, location: !!location }
       }
     };
