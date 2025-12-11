@@ -1898,6 +1898,80 @@ function autoStartSingleAgent(agentName, agentPath) {
 }
 
 // ============================================
+// EXPLORE SCORED OPPORTUNITIES DATA
+// ============================================
+// See what data is available and its structure
+
+app.get('/api/explore-leads', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = parseInt(req.query.offset) || 0;
+
+    // Get sample records with different sources
+    const { data: samples, error } = await supabase
+      .from('scored_opportunities')
+      .select('id, company_name, company_domain, overall_score, priority_tier, source, created_at, opportunity_data')
+      .not('company_domain', 'eq', 'reddit.com')
+      .not('company_name', 'like', '/u/%')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    // Get sources breakdown
+    const { data: sources } = await supabase
+      .from('scored_opportunities')
+      .select('source')
+      .not('company_domain', 'eq', 'reddit.com');
+
+    const sourceCount = {};
+    sources?.forEach(s => {
+      sourceCount[s.source || 'null'] = (sourceCount[s.source || 'null'] || 0) + 1;
+    });
+
+    // Analyze data structure of samples
+    const analyzed = samples?.map(s => {
+      const oppData = s.opportunity_data || {};
+      return {
+        id: s.id,
+        company: s.company_name,
+        domain: s.company_domain,
+        score: s.overall_score,
+        priority: s.priority_tier,
+        source: s.source,
+        created: s.created_at,
+        data_structure: {
+          has_research: !!oppData.research,
+          has_lead_research: !!oppData.lead_research,
+          has_email_draft: !!oppData.email_draft,
+          has_discovered_email: !!oppData.discovered_email,
+          keys: Object.keys(oppData)
+        },
+        research_preview: oppData.research?.companyBackground?.substring(0, 150) ||
+                         oppData.lead_research?.company_background?.substring(0, 150) ||
+                         'No research data',
+        email_found: oppData.discovered_email || oppData.email_discovery_raw?.email || 'None'
+      };
+    });
+
+    res.json({
+      success: true,
+      total_non_reddit: sources?.length || 0,
+      sources_breakdown: sourceCount,
+      showing: samples?.length || 0,
+      offset,
+      samples: analyzed
+    });
+
+  } catch (error) {
+    console.error('Explore leads error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
 // PREVIEW EMAILS FROM SCORED OPPORTUNITIES
 // ============================================
 // Generates email previews from top-scoring leads in scored_opportunities table
@@ -1906,15 +1980,26 @@ function autoStartSingleAgent(agentName, agentPath) {
 app.get('/api/preview-top-leads', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
-    const minScore = parseInt(req.query.min_score) || 70;
+    const minScore = parseInt(req.query.min_score) || 50;
+    const source = req.query.source || null;
 
-    // Get top-scoring leads from scored_opportunities
-    const { data: opportunities, error } = await supabase
+    // Build query for scored_opportunities with research data
+    let query = supabase
       .from('scored_opportunities')
       .select('*')
       .gte('overall_score', minScore)
+      .not('company_domain', 'eq', 'reddit.com') // Exclude Reddit sources
+      .not('company_name', 'like', '/u/%')       // Exclude Reddit usernames
+      .not('opportunity_data', 'is', null);      // Must have opportunity data
+
+    // Filter by source if specified
+    if (source) {
+      query = query.eq('source', source);
+    }
+
+    const { data: opportunities, error } = await query
       .order('overall_score', { ascending: false })
-      .limit(limit);
+      .limit(limit * 3); // Get more to filter for ones with research
 
     if (error) {
       return res.status(500).json({ error: error.message });
@@ -1928,30 +2013,53 @@ app.get('/api/preview-top-leads', async (req, res) => {
       });
     }
 
-    // Transform to lead format and generate emails
-    const previews = opportunities.map(opp => {
-      // Extract data from opportunity_data
+    // Filter for opportunities with actual research data
+    const withResearch = opportunities.filter(opp => {
       const oppData = opp.opportunity_data || {};
       const research = oppData.research || {};
+      // Must have some research content
+      return (
+        research.companyBackground?.length > 50 ||
+        research.painPoints?.length > 50 ||
+        oppData.lead_research?.company_background?.length > 50
+      );
+    });
+
+    // Use filtered list, or fall back to original if nothing has research
+    const targetOpps = withResearch.length > 0 ? withResearch.slice(0, limit) : opportunities.slice(0, limit);
+
+    // Transform to lead format and generate emails
+    const previews = targetOpps.map(opp => {
+      // Extract data from opportunity_data - try multiple structures
+      const oppData = opp.opportunity_data || {};
+      const research = oppData.research || {};
+      const leadResearch = oppData.lead_research || {};
 
       // Try to find email from various sources
       const discoveredEmail = oppData.discovered_email ||
         oppData.email_discovery_raw?.email ||
+        leadResearch.contact_email ||
         null;
 
-      // Build lead object for SmartEmailWriter
+      // Get contact name from various sources
+      const contactName = leadResearch.contact_name ||
+        research.decisionMaker?.substring(0, 50) ||
+        oppData.contact_name ||
+        null;
+
+      // Build lead object for SmartEmailWriter - merge research from multiple structures
       const lead = {
         id: opp.id,
         company_name: opp.company_name,
         company_domain: opp.company_domain,
-        contact_name: research.decisionMaker?.substring(0, 50) || null,
+        contact_name: contactName,
         contact_email: discoveredEmail,
         fit_score: opp.overall_score,
         lead_research: {
-          company_background: research.companyBackground || '',
-          pain_points: research.painPoints || '',
-          personalization_hooks: research.personalizationHooks || '',
-          decision_maker: research.decisionMaker || ''
+          company_background: research.companyBackground || leadResearch.company_background || '',
+          pain_points: research.painPoints || leadResearch.pain_points || '',
+          personalization_hooks: research.personalizationHooks || leadResearch.personalization_hooks || '',
+          decision_maker: research.decisionMaker || leadResearch.decision_maker || ''
         }
       };
 
@@ -1971,9 +2079,9 @@ app.get('/api/preview-top-leads', async (req, res) => {
           source: opp.source
         },
         research_summary: {
-          background: (research.companyBackground || '').substring(0, 300),
-          pain_points: (research.painPoints || '').substring(0, 300),
-          hooks: (research.personalizationHooks || '').substring(0, 200)
+          background: (lead.lead_research.company_background || '').substring(0, 300),
+          pain_points: (lead.lead_research.pain_points || '').substring(0, 300),
+          hooks: (lead.lead_research.personalization_hooks || '').substring(0, 200)
         },
         email: {
           subject: email.subject,
@@ -1992,6 +2100,8 @@ app.get('/api/preview-top-leads', async (req, res) => {
     res.json({
       success: true,
       total_found: opportunities.length,
+      with_research: withResearch.length,
+      showing: targetOpps.length,
       ready_to_send: readyCount,
       missing_email: previews.filter(p => !p.lead.contact_email).length,
       previews: previews
