@@ -1898,6 +1898,54 @@ function autoStartSingleAgent(agentName, agentPath) {
 }
 
 // ============================================
+// FIND RESEARCHED LEADS
+// ============================================
+// Find leads that have actual Perplexity research data
+
+app.get('/api/find-researched', async (req, res) => {
+  try {
+    // Get all leads and filter for ones with real research
+    const { data: leads, error } = await supabase
+      .from('scored_opportunities')
+      .select('id, company_name, company_domain, overall_score, source, opportunity_data')
+      .order('overall_score', { ascending: false })
+      .limit(500);
+
+    if (error) throw error;
+
+    // Filter for leads with actual research content
+    const researched = leads.filter(l => {
+      const oppData = l.opportunity_data || {};
+      const research = oppData.lead_research || oppData.research || {};
+      const bg = research.company_background || research.companyBackground || '';
+      const pain = research.pain_points || research.painPoints || '';
+
+      // Must have substantial content that's not "skipped"
+      return (bg.length > 100 && !bg.includes('Research skipped')) ||
+             (pain.length > 50 && !pain.includes('Research skipped'));
+    });
+
+    res.json({
+      success: true,
+      total_checked: leads.length,
+      researched_count: researched.length,
+      researched: researched.map(l => ({
+        id: l.id,
+        company: l.company_name,
+        domain: l.company_domain,
+        score: l.overall_score,
+        source: l.source,
+        research_preview: (l.opportunity_data?.lead_research?.company_background ||
+                          l.opportunity_data?.research?.companyBackground || '').substring(0, 200)
+      }))
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
 // EXPLORE SCORED OPPORTUNITIES DATA
 // ============================================
 // See what data is available and its structure
