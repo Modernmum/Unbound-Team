@@ -599,13 +599,28 @@ app.post('/api/research-leads', async (req, res) => {
           }
         }
 
-        await supabase
+        const { error: updateError } = await supabase
           .from('scored_opportunities')
           .update({ opportunity_data: updatedOpportunityData })
           .eq('id', lead.id);
 
+        if (updateError) {
+          throw new Error(`Database save failed: ${updateError.message}`);
+        }
+
+        // Verify the save actually worked
+        const { data: verifyData, error: verifyError } = await supabase
+          .from('scored_opportunities')
+          .select('opportunity_data')
+          .eq('id', lead.id)
+          .single();
+
+        if (verifyError || !verifyData?.opportunity_data?.lead_research?.researched_at) {
+          throw new Error(`Save verification failed - data not found after update`);
+        }
+
         results.researched++;
-        console.log(`   ✅ Research saved for ${lead.company_name}`);
+        console.log(`   ✅ Research saved and verified for ${lead.company_name}`);
 
         // Rate limit - 2 seconds between research calls
         await new Promise(resolve => setTimeout(resolve, 2000));
