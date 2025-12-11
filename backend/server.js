@@ -739,47 +739,92 @@ app.post('/api/discover-company', async (req, res) => {
 function generateDiscoveryEmail(opportunity, research, scoring) {
   const company = opportunity.company_name;
 
-  // Extract company background for personalized opening
-  let companyInfo = '';
-  if (research.companyBackground?.findings) {
-    companyInfo = research.companyBackground.findings.split('\n').slice(0, 2).join(' ').substring(0, 200);
-  }
-
-  // Get first name - prioritize contact_name from opportunity data
+  // Get first name
   let firstName = '';
   if (opportunity.contact_name) {
-    // Extract first name from full name (e.g., "Eric Verzuh" -> "Eric")
     firstName = opportunity.contact_name.split(' ')[0];
   } else if (research.decisionMaker?.findings) {
-    // Fallback: try to extract from research
     const dmMatch = research.decisionMaker.findings.match(/([A-Z][a-z]+)\s+[A-Z]/);
     if (dmMatch) firstName = dmMatch[1];
   }
 
-  const subject = `${company} - growth without the chaos`;
+  // Extract specific details from research
+  const background = research.companyBackground?.findings || '';
+  const painPoints = research.painPointAnalysis?.findings || '';
+  const hooks = research.personalizationHooks?.findings || '';
 
-  let body = firstName ? `Hi ${firstName},\n\n` : `Hi,\n\n`;
+  // Find specific company details
+  const yearsMatch = background.match(/(\d+)\+?\s*years?/i) || background.match(/founded\s*(?:in\s*)?(\d{4})/i);
+  const years = yearsMatch ? (yearsMatch[1].length === 4 ? (2025 - parseInt(yearsMatch[1])) : yearsMatch[1]) : null;
 
-  // Personalized opening based on company research
-  if (companyInfo && companyInfo.length > 50) {
-    // Extract years in business or key achievement from research
-    const yearsMatch = companyInfo.match(/(\d+)\+?\s*years?/i);
-    const years = yearsMatch ? yearsMatch[1] : null;
+  // Extract what they do (first sentence of background)
+  const whatTheyDo = background.split('.')[0]?.replace(/^\*+\s*/, '').trim();
 
-    if (years) {
-      body += `After ${years}+ years building ${company}, I'd imagine you're thinking about what the next chapter looks like.\n\n`;
-    } else {
-      body += `After building ${company} into what it is today, I'd imagine you're thinking about what the next chapter looks like.\n\n`;
-    }
+  // Identify their specific pain point from research
+  let specificPain = '';
+  let solution = '';
+
+  if (painPoints.toLowerCase().includes('leadership dependency') || painPoints.toLowerCase().includes('founder') || painPoints.toLowerCase().includes('owner-operated')) {
+    specificPain = "you're still the one everyone turns to for the big decisions";
+    solution = "building a leadership layer that can carry the weight";
+  } else if (painPoints.toLowerCase().includes('relationship-dependent') || painPoints.toLowerCase().includes('relationship dependent')) {
+    specificPain = "your best clients came through relationships you personally built";
+    solution = "creating a pipeline that doesn't depend on your personal network";
+  } else if (painPoints.toLowerCase().includes('infrastructure') || painPoints.toLowerCase().includes('manual') || painPoints.toLowerCase().includes('scale')) {
+    specificPain = "the systems that got you here won't get you to the next level";
+    solution = "architecting infrastructure that scales without adding complexity";
+  } else if (painPoints.toLowerCase().includes('team') || painPoints.toLowerCase().includes('staff')) {
+    specificPain = "your team needs you in the room to deliver at your standard";
+    solution = "building systems so your team can operate at your level";
   } else {
-    body += `After building ${company} into what it is today, I'd imagine you're thinking about what the next chapter looks like.\n\n`;
+    specificPain = "you've built something valuable but it still runs through you";
+    solution = "creating systems that let you step back without stepping down";
   }
 
-  body += `Not slowing down necessarily - but maybe building something that doesn't require you in every client conversation. Something that runs with the same quality whether you're in the room or not.\n\n`;
+  // Find a specific hook from research (achievement, recognition, etc.)
+  let personalHook = '';
+  if (hooks && hooks.length > 20) {
+    // Look for achievements, awards, growth milestones
+    const hookMatch = hooks.match(/(?:recognized|award|growth|milestone|achievement|speaker|author|featured)[^.]*\./i);
+    if (hookMatch) {
+      personalHook = hookMatch[0].replace(/^\*+\s*/, '').trim();
+    }
+  }
 
-  body += `That's the gap I help leaders close. Not by adding more complexity, but by architecting systems that let you choose where to spend your time.\n\n`;
+  // Build the subject line - more specific when we have info
+  let subject = '';
+  if (whatTheyDo && whatTheyDo.length > 10 && whatTheyDo.length < 60) {
+    subject = `${firstName || company} - a question about what's next`;
+  } else {
+    subject = `${company} - growth without the chaos`;
+  }
 
-  body += `If you're ready to make your next move, I'd enjoy a conversation.\n\n`;
+  // Build truly personalized email
+  let body = firstName ? `Hi ${firstName},\n\n` : `Hi,\n\n`;
+
+  // Opening - reference something specific about them
+  if (personalHook) {
+    body += `I noticed ${personalHook.toLowerCase().startsWith('you') ? '' : 'that '}${personalHook.toLowerCase()}\n\n`;
+    body += `Leaders who've achieved that level often hit a similar inflection point: `;
+  } else if (years && years > 5) {
+    body += `${years} years building ${company} - that's not luck, that's proof you know how to create something that works.\n\n`;
+    body += `At this stage, the question usually shifts from "how do I grow?" to `;
+  } else if (whatTheyDo && whatTheyDo.length > 20) {
+    body += `Building a ${whatTheyDo.toLowerCase().includes('firm') || whatTheyDo.toLowerCase().includes('company') ? 'business' : 'practice'} like ${company} takes real expertise and relentless execution.\n\n`;
+    body += `But I'm guessing you're at the point where `;
+  } else {
+    body += `I've been looking at ${company} and the business you've built.\n\n`;
+    body += `My guess is `;
+  }
+
+  // Connect to their specific pain point
+  body += `${specificPain}.\n\n`;
+
+  // The pivot - what MFS does
+  body += `That's the gap I help established leaders close - ${solution}.\n\n`;
+
+  // Soft CTA
+  body += `If that resonates, I'd enjoy a conversation about what the next chapter could look like for ${company}.\n\n`;
 
   body += `Best,\n`;
   body += `Maggie Forbes\n`;
